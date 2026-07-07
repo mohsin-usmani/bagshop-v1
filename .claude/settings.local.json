@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wrangler *)",
+      "Bash(npm --version)",
+      "PowerShell(npm *)",
+      "PowerShell(wrangler *)",
+      "PowerShell($env:PATH = [Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" --version; & \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --version)"
+    ]
+  }
+}

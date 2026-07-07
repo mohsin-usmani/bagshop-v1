@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Catalogue</title>
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div id="app"><div class="notice muted">Loading catalogue…</div></div>
+
+  <div class="cartbar" id="cartbar" style="display:none">
+    <div class="wrap">
+      <div><strong id="cartCount">0</strong> item(s) in cart</div>
+      <button class="btn amber" onclick="openCart()">View & Send Order</button>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer" onclick="if(event.target===this)closeCart()">
+    <div class="sheet">
+      <div class="hd"><h3>Your order</h3><span class="x muted" style="cursor:pointer" onclick="closeCart()">Close ✕</span></div>
+      <div id="cartLines"></div>
+      <div id="cartTotal" class="center" style="margin:12px 0;font-weight:800"></div>
+      <button class="btn" style="width:100%;justify-content:center" onclick="sendOrder()">Send Order on WhatsApp</button>
+      <p class="muted center" style="font-size:12px;margin-top:10px">This opens WhatsApp with your order ready to send.</p>
+    </div>
+  </div>
+
+<script src="/assets/common.js"></script>
+<script src="/assets/catalog.js"></script>
+</body>
+</html>

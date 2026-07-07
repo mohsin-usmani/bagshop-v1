@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Admin</title>
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+<div class="topbar"><div class="wrap">
+  <div class="shopname" id="hdrName">Shop Admin</div>
+  <a href="#" onclick="loadAll();return false" style="color:#fff;font-size:13px">↻ Refresh</a>
+</div></div>
+
+<div class="wrap">
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-p="stock">Stock</div>
+    <div class="tab" data-p="articles">Articles</div>
+    <div class="tab" data-p="links">Customer Links</div>
+    <div class="tab" data-p="orders">Orders</div>
+    <div class="tab" data-p="settings">Settings</div>
+  </div>
+
+  <!-- STOCK -->
+  <div class="panel on" id="p-stock">
+    <div class="hd"><h3>Update stock</h3><button class="btn amber" onclick="saveStock()">Save changes</button></div>
+    <p class="muted" style="margin-top:0">Change any quantity or price, then Save. Customers see it instantly.</p>
+    <div id="stockTable"></div>
+  </div>
+
+  <!-- ARTICLES -->
+  <div class="panel" id="p-articles">
+    <div class="hd"><h3>Articles</h3><button class="btn" onclick="toggleAdd()">+ Add new bag</button></div>
+    <div class="card artcard" id="addForm" style="display:none">
+      <div class="grid2">
+        <div class="field"><label>Article code *</label><input id="na_code" placeholder="BAG-1023"></div>
+        <div class="field"><label>Name</label><input id="na_name" placeholder="Ladies Handbag"></div>
+        <div class="field"><label>Category *</label><input id="na_cat" placeholder="Handbag" list="catList"></div>
+        <div class="field"><label>Base price / pc</label><input id="na_price" type="number" placeholder="245"></div>
+      </div>
+      <div class="field"><label>Description</label><input id="na_desc" placeholder="PU leather, zip closure"></div>
+      <div class="row-actions"><button class="btn" onclick="createArticle()">Create</button><button class="btn ghost" onclick="toggleAdd()">Cancel</button></div>
+    </div>
+    <datalist id="catList"></datalist>
+    <div id="artList"></div>
+  </div>
+
+  <!-- LINKS -->
+  <div class="panel" id="p-links">
+    <h3>Give a customer access</h3>
+    <div class="card artcard">
+      <div class="grid2">
+        <div class="field"><label>Customer name / shop</label><input id="lk_label" placeholder="Rahul Bags"></div>
+        <div class="field"><label>WhatsApp number (with country code)</label><input id="lk_phone" placeholder="9198xxxxxx12"></div>
+      </div>
+      <div class="field" style="max-width:220px"><label>Valid for (hours)</label><input id="lk_hours" type="number" value="4"></div>
+      <button class="btn" onclick="createLink()">Create link</button>
+    </div>
+    <div id="linkResult"></div>
+    <h3 style="margin-top:18px">Active & recent links</h3>
+    <div id="linkList"></div>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="panel" id="p-orders">
+    <h3>Orders received</h3>
+    <p class="muted" style="margin-top:0">A copy of every cart sent to you. The conversation itself is on WhatsApp.</p>
+    <div id="orderList"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="panel" id="p-settings">
+    <h3>Settings</h3>
+    <div class="card artcard" style="max-width:520px">
+      <div class="field"><label>Shop name</label><input id="st_name"></div>
+      <div class="field"><label>Your WhatsApp number (orders go here — country code, no +)</label><input id="st_phone" placeholder="9198xxxxxx12"></div>
+      <div class="grid2">
+        <div class="field"><label>Currency symbol</label><input id="st_cur"></div>
+        <div class="field"><label>Default link hours</label><input id="st_hours" type="number"></div>
+      </div>
+      <div class="field"><label>Show prices in catalogue?</label>
+        <select id="st_show"><option value="1">Yes — show prices</option><option value="0">No — hide prices</option></select></div>
+      <button class="btn" onclick="saveSettings()">Save settings</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/common.js"></script>
+<script src="/assets/admin.js"></script>
+</body>
+</html>
