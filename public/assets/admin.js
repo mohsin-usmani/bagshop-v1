@@ -207,7 +207,7 @@ function authFail(data) {
   }
 }
 function val(id) { const e = document.getElementById(id); return e ? e.value.trim() : ""; }
-function jq(s) { return JSON.stringify(String(s)); }
+function jq(s) { return "'" + String(s).replace(/'/g, "\\'") + "'"; }
 function fmt(ms) { const d = new Date(Number(ms)); return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 
 loadAll();

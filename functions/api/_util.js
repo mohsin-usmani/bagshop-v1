@@ -23,16 +23,37 @@ export function newToken() {
   return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// Admin gate. In production Cloudflare Access sits in front of /admin + /api/admin
-// and injects the Cf-Access-Authenticated-User-Email header. DEV=1 bypasses for local testing.
+// Admin gate. Cloudflare Access sits in front of /admin.html and injects
+// Cf-Access-Authenticated-User-Email on that path. For API fetch calls from
+// the same session we fall back to the CF_Authorization cookie Access set at login.
 export function isAdmin(context) {
   const { request, env } = context;
   if (env.DEV === "1") return true;
-  const email = request.headers.get("Cf-Access-Authenticated-User-Email");
-  if (!email) return false;
+
   const allow = (env.ALLOWED_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length && !allow.includes(email)) return false;
-  return true;
+
+  // Prefer the header (present when Access also covers the API path)
+  const headerEmail = request.headers.get("Cf-Access-Authenticated-User-Email");
+  if (headerEmail) {
+    if (allow.length && !allow.includes(headerEmail)) return false;
+    return true;
+  }
+
+  // Fall back to the CF_Authorization JWT cookie set by Access at login
+  const cookie = request.headers.get("cookie") || "";
+  const m = cookie.match(/CF_Authorization=([^;]+)/);
+  if (!m) return false;
+  try {
+    const parts = m[1].split(".");
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (!payload.email) return false;
+    if (payload.exp && Date.now() / 1000 > payload.exp) return false;
+    if (allow.length && !allow.includes(payload.email)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getSettings(env) {
