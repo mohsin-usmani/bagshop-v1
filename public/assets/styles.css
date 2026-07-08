@@ -53,30 +53,32 @@ label{font-size:12.5px;font-weight:700;color:var(--muted);display:block;margin-b
 .topbar-cust{font-size:11px;opacity:.65;margin-top:1px;letter-spacing:.2px}
 /* ── filter bar ── */
 .filter-bar{position:sticky;top:52px;background:#fff;z-index:10;border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.05)}
-/* category pills row */
-.fcat-row{display:flex;gap:6px;align-items:center;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:10px 14px 0}
-.fcat-row::-webkit-scrollbar{display:none}
-.fpill{display:inline-flex;align-items:center;padding:6px 15px;border-radius:999px;font-size:13px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0;transition:all .15s}
-.fpill.on{background:var(--ink);border-color:var(--ink);color:#fff}
-/* chips + search row */
-.fchips-row{display:flex;align-items:center;gap:8px;padding:8px 14px;overflow-x:auto;scrollbar-width:none}
+/* chips + search in one row */
+.fchips-row{display:flex;align-items:center;gap:8px;padding:10px 14px;overflow-x:auto;scrollbar-width:none}
 .fchips-row::-webkit-scrollbar{display:none}
+/* search first in the row */
+.fbar-search{position:relative;flex-shrink:0;min-width:120px;max-width:180px}
+.fbar-search input{padding:8px 10px 8px 32px;border-radius:999px;font-size:13px;width:100%;border:1.5px solid var(--line);background:#f7f7f7;color:var(--ink)}
+.fbar-search .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+/* divider between search and chips */
+.fbar-divider{width:1px;height:22px;background:var(--line);flex-shrink:0}
 #fchips{display:flex;gap:7px;flex-shrink:0}
 /* individual filter chip */
-.fchip{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:999px;font-size:13px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit;transition:all .15s}
+.fchip{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit;transition:all .15s}
 .fchip.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.fchip-arr{font-size:10px;opacity:.55}
+.fchip-arr{font-size:10px;opacity:.5}
 .fchip-x{font-size:15px;line-height:1;margin-left:1px;opacity:.8}
-/* search inside chips row */
-.fbar-search{flex:1;min-width:90px;position:relative}
-.fbar-search input{padding:7px 10px 7px 32px;border-radius:999px;font-size:13px;width:100%;border:1.5px solid var(--line);background:#f7f7f7}
-.fbar-search .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 /* chip option panel */
-.fpanel{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px 14px;background:#fff;border-top:1px solid var(--line)}
-.fopt{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:10px;font-size:13.5px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;transition:all .14s}
+.fpanel{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px 16px;background:#fafafa;border-top:1px solid var(--line)}
+.fopt{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;transition:all .14s}
 .fopt:hover:not(.on){border-color:var(--ink)}
 .fopt.on{background:var(--ink);border-color:var(--ink);color:#fff}
-.fopt-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.fopt-dot{width:15px;height:15px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+/* custom price range */
+.custom-price-wrap{width:100%;border-top:1px solid var(--line);padding-top:12px;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.custom-price-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;width:100%;margin-bottom:2px}
+.custom-price-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.custom-price-row input{width:90px;padding:8px 10px;border-radius:8px;font-size:13px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;padding:0 0 110px}
 @media(min-width:480px){.grid{gap:10px}}
 @media(min-width:640px){.grid{grid-template-columns:1fr 1fr 1fr;gap:12px}}
@@ -132,9 +134,19 @@ label{font-size:12.5px;font-weight:700;color:var(--muted);display:block;margin-b
 /* ── product detail modal ── */
 .prod-modal{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:50;display:none;align-items:flex-end;justify-content:center}
 .prod-modal.open{display:flex}
-@media(min-width:640px){.prod-modal{align-items:center}}
 .prod-modal-inner{position:relative;background:#fff;width:100%;max-width:560px;max-height:94vh;overflow-y:auto;border-radius:24px 24px 0 0}
-@media(min-width:640px){.prod-modal-inner{border-radius:20px;margin:16px;max-height:90vh}}
+/* desktop: side-by-side layout */
+@media(min-width:640px){
+  .prod-modal{align-items:center}
+  .prod-modal-inner{border-radius:20px;margin:16px;max-height:88vh;max-width:920px;overflow:hidden;display:flex;flex-direction:column}
+  .modal-layout{flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0}
+  .modal-photo-side{width:46%;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--line);overflow:hidden}
+  .modal-photo-side .modal-photo-area{flex:1;aspect-ratio:unset;min-height:0}
+  .modal-info-side{flex:1;overflow-y:auto}
+}
+@media(max-width:639px){
+  .modal-layout{display:flex;flex-direction:column}
+}
 .prod-modal.open .prod-modal-inner{animation:slideUp .26s cubic-bezier(.32,1,.6,1)}
 @keyframes slideUp{from{transform:translateY(56px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-close-btn{position:absolute;top:12px;right:12px;z-index:4;background:rgba(0,0,0,.42);color:#fff;border:none;width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}

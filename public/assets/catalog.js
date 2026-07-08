@@ -61,10 +61,10 @@ function render() {
         '</div>' +
       '</div>' +
       '<div class="filter-bar" id="filterBar">' +
-        '<div class="fcat-row" id="catRow"></div>' +
         '<div class="fchips-row" id="fchipsRow">' +
+          '<div class="fbar-search"><svg class="search-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input id="search" placeholder="Search…"></div>' +
+          '<div class="fbar-divider"></div>' +
           '<div id="fchips"></div>' +
-          '<div class="search-box fbar-search"><svg class="search-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input id="search" placeholder="Search…"></div>' +
         '</div>' +
         '<div class="fpanel" id="fpanel" hidden></div>' +
       '</div>' +
@@ -75,15 +75,7 @@ function render() {
     });
   }
 
-  // Category pills
-  const catRow = document.getElementById("catRow");
-  catRow.innerHTML =
-    '<span class="fpill' + (FILTER.category === "" ? " on" : "") + '" onclick="setF(\'category\',\'\')">All</span>' +
-    f.categories.map(c =>
-      '<span class="fpill' + (FILTER.category === c ? " on" : "") + '" onclick="setF(\'category\',' + jq(c) + ')">' + esc(c) + '</span>'
-    ).join("");
-
-  // Filter chips
+  // Filter chips (category merged in as first chip)
   const hasPrice = FILTER.price_min !== "" || FILTER.price_max !== "";
   function chip(id, label, active) {
     return '<button class="fchip' + (active ? " on" : "") + '" id="fch-' + id + '" onclick="openChip(' + jq(id) + ')">' +
@@ -94,9 +86,10 @@ function render() {
     '</button>';
   }
   document.getElementById("fchips").innerHTML =
-    chip("color", FILTER.color ? "Color: " + FILTER.color : "Color", !!FILTER.color) +
-    chip("size",  FILTER.size  ? "Size: "  + FILTER.size  : "Size",  !!FILTER.size) +
-    chip("price", hasPrice ? getPriceLabel() : "Price", hasPrice);
+    chip("category", FILTER.category || "Category", !!FILTER.category) +
+    chip("color",    FILTER.color ? "Color: " + FILTER.color : "Color", !!FILTER.color) +
+    chip("size",     FILTER.size  ? "Size: "  + FILTER.size  : "Size",  !!FILTER.size) +
+    chip("price",    hasPrice ? getPriceLabel() : "Price", hasPrice);
 
   const grid = document.getElementById("grid");
   grid.innerHTML = DATA.articles.length
@@ -286,12 +279,16 @@ function addToCart(aid) {
   const a = DATA.articles.find(x => x.id === aid); if (!a) return;
   const sel = SELECTION[aid] || {};
   if (!sel.color) return toast("Please select a colour");
-  if (!sel.size)  return toast("Please select a size");
-  const v = a.variants.find(x => x.color === sel.color && x.size === sel.size);
+  const colVars = a.variants.filter(x => x.color === sel.color);
+  const hasSizes = colVars.some(x => x.size && x.size.trim());
+  if (hasSizes && !sel.size) return toast("Please select a size");
+  const v = hasSizes
+    ? a.variants.find(x => x.color === sel.color && x.size === sel.size)
+    : colVars.find(x => x.available_qty > 0) || colVars[0];
   if (!v || v.available_qty <= 0) return toast("Out of stock");
   const qty = sel.qty || 1;
   const price = v.price != null ? v.price : a.base_price;
-  const label = a.article_code + " " + sel.color + " " + sel.size;
+  const label = a.article_code + " " + sel.color + (v.size ? " " + v.size : "");
   if (CART[v.id]) {
     CART[v.id].qty = Math.min(CART[v.id].qty + qty, v.available_qty);
   } else {
@@ -354,8 +351,11 @@ function detailHTML(a) {
         ? '<div class="more-colors-label">COLOUR <span class="more-colors-selected">— ' + esc(selColor) + '</span></div>'
         : '');
 
-  // ── size chips ──
-  const sizeChips = colVars.length
+  // whether this article uses sizes at all
+  const hasSizes = colVars.some(v => v.size && v.size.trim());
+
+  // ── size chips (only when article has sizes) ──
+  const sizeChips = hasSizes
     ? '<div class="modal-section-label" style="margin-top:14px">SIZE</div>' +
       '<div class="size-chip-row" style="margin-top:10px">' +
         colVars.map(v =>
@@ -367,9 +367,13 @@ function detailHTML(a) {
     : '';
 
   // ── add to cart ──
+  // can proceed if size selected OR article has no sizes (one-click buy)
+  const canAdd = selSize || !hasSizes;
   let addSection = '';
-  if (selSize) {
-    const sv = colVars.find(v => v.size === selSize);
+  if (canAdd) {
+    const sv = hasSizes
+      ? colVars.find(v => v.size === selSize)
+      : colVars.find(v => v.available_qty > 0) || colVars[0];
     if (sv && sv.available_qty > 0) {
       const price = sv.price ?? a.base_price;
       const qty   = sel.qty || 1;
@@ -388,7 +392,7 @@ function detailHTML(a) {
               '<input type="number" class="modal-qty-input" min="1" max="' + sv.available_qty + '" value="' + qty + '" onchange="setModalQty(' + jq(a.id) + ',this.value,' + sv.available_qty + ')">' +
               '<button onclick="modalChg(' + jq(a.id) + ',1)">+</button>' +
             '</div>' +
-            (SHOW_PRICES && price != null ? '<span style="font-size:16px;font-weight:800;color:var(--ink);margin-left:auto">' + esc(CUR) + ' ' + price + '/pc</span>' : '') +
+            (SHOW_PRICES && price != null ? '<span style="font-size:16px;font-weight:800;color:var(--amber);margin-left:auto">' + esc(CUR) + ' ' + price + '/pc</span>' : '') +
           '</div>' +
           '<button class="btn-add-cart" onclick="addToCart(' + jq(a.id) + ')">' +
             IC_BAG + 'Add to Cart' +
@@ -397,34 +401,44 @@ function detailHTML(a) {
           (inCart ? '<div class="modal-in-cart">' + IC_OK + ' ' + inCart + ' pc already in your cart</div>' : '') +
         '</div>';
     } else if (sv) {
-      addSection = '<div class="modal-divider"></div><div style="padding:14px 0;color:#C0563F;font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>This size is out of stock</div>';
+      addSection = '<div class="modal-divider"></div><div style="padding:14px 0;color:#C0563F;font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Out of stock</div>';
     }
   } else if (colVars.length) {
     addSection = '<div class="modal-divider"></div><div style="padding:14px 0;color:var(--muted);font-size:13.5px;text-align:center">Select a size to continue →</div>';
   }
 
-  return '<div class="modal-photo-area">' +
-      (showPhotos.length > 1 ? '<button class="slide-btn prev" onclick="prevDPhoto(' + jq(a.id) + ')">&#8249;</button>' : '') +
-      bigImg +
-      (showPhotos.length > 1 ? '<button class="slide-btn next" onclick="nextDPhoto(' + jq(a.id) + ')">&#8250;</button>' : '') +
-      dots +
-    '</div>' +
-    thumbs +
-    '<div class="modal-info">' +
-      '<div class="modal-meta-row">' +
-        '<span class="modal-code-tag">' + esc(a.article_code) + '</span>' +
-        '<span class="modal-cat-tag">' + esc(a.category) + '</span>' +
+  // Desktop: side-by-side (photo left, info right) via CSS .modal-layout
+  const photoSide =
+    '<div class="modal-photo-side">' +
+      '<div class="modal-photo-area">' +
+        (showPhotos.length > 1 ? '<button class="slide-btn prev" onclick="prevDPhoto(' + jq(a.id) + ')">&#8249;</button>' : '') +
+        bigImg +
+        (showPhotos.length > 1 ? '<button class="slide-btn next" onclick="nextDPhoto(' + jq(a.id) + ')">&#8250;</button>' : '') +
+        dots +
       '</div>' +
-      '<div class="modal-name">' + esc(a.name || '') + '</div>' +
-      (SHOW_PRICES && minPrice != null
-        ? '<div class="modal-price-row"><span class="modal-price">' + esc(CUR) + ' ' + minPrice + '</span><span class="modal-price-note">per piece</span></div>'
-        : '') +
-      (a.description ? '<p class="desc-text">' + esc(a.description) + '</p>' : '') +
-      '<div class="modal-divider"></div>' +
-      swatches +
-      sizeChips +
-      addSection +
+      thumbs +
     '</div>';
+
+  const infoSide =
+    '<div class="modal-info-side">' +
+      '<div class="modal-info">' +
+        '<div class="modal-meta-row">' +
+          '<span class="modal-code-tag">' + esc(a.article_code) + '</span>' +
+          '<span class="modal-cat-tag">' + esc(a.category) + '</span>' +
+        '</div>' +
+        '<div class="modal-name">' + esc(a.name || '') + '</div>' +
+        (SHOW_PRICES && minPrice != null
+          ? '<div class="modal-price-row"><span class="modal-price">' + esc(CUR) + ' ' + minPrice + '</span><span class="modal-price-note">per piece · wholesale</span></div>'
+          : '') +
+        (a.description ? '<p class="desc-text">' + esc(a.description) + '</p>' : '') +
+        '<div class="modal-divider"></div>' +
+        swatches +
+        sizeChips +
+        addSection +
+      '</div>' +
+    '</div>';
+
+  return '<div class="modal-layout">' + photoSide + infoSide + '</div>';
 }
 
 function prevDPhoto(aid) {
@@ -507,7 +521,13 @@ function openChip(id) {
   if (CHIP_OPEN === id) { closeChips(); return; }
   CHIP_OPEN = id;
   panel.hidden = false;
-  if (id === "color") {
+  if (id === "category") {
+    panel.innerHTML =
+      '<button class="fopt' + (!FILTER.category ? " on" : "") + '" onclick="setF(\'category\',\'\')">All Categories</button>' +
+      DATA.filters.categories.map(c =>
+        '<button class="fopt' + (FILTER.category === c ? " on" : "") + '" onclick="setF(\'category\',' + jq(c) + ')">' + esc(c) + '</button>'
+      ).join("");
+  } else if (id === "color") {
     panel.innerHTML = DATA.filters.colors.map(c =>
       '<button class="fopt' + (FILTER.color === c ? " on" : "") + '" onclick="setF(\'color\',' + jq(c) + ')">' +
         '<span class="fopt-dot" style="background:' + (COLOR_CSS[c] || '#999') + '"></span>' + esc(c) +
@@ -524,11 +544,26 @@ function openChip(id) {
       { label: CUR + "1000 – " + CUR + "1999",   min: "1000", max: "1999" },
       { label: CUR + "2000+",                     min: "2000", max: ""     },
     ];
-    panel.innerHTML = ranges.map(r => {
-      const active = FILTER.price_min === r.min && FILTER.price_max === r.max;
-      return '<button class="fopt' + (active ? " on" : "") + '" onclick="setPrice(' + jq(r.min) + ',' + jq(r.max) + ')">' + esc(r.label) + '</button>';
-    }).join("");
+    panel.innerHTML =
+      ranges.map(r => {
+        const active = FILTER.price_min === r.min && FILTER.price_max === r.max;
+        return '<button class="fopt' + (active ? " on" : "") + '" onclick="setPrice(' + jq(r.min) + ',' + jq(r.max) + ')">' + esc(r.label) + '</button>';
+      }).join("") +
+      '<div class="custom-price-wrap">' +
+        '<span class="custom-price-label">Custom range</span>' +
+        '<div class="custom-price-row">' +
+          '<input type="number" id="fp-min" placeholder="Min" value="' + (FILTER.price_min || '') + '" min="0">' +
+          '<span style="color:var(--muted);font-weight:600;padding:0 4px">—</span>' +
+          '<input type="number" id="fp-max" placeholder="Max" value="' + (FILTER.price_max || '') + '" min="0">' +
+          '<button class="fopt" onclick="applyCustomPrice()" style="white-space:nowrap;flex-shrink:0">Apply</button>' +
+        '</div>' +
+      '</div>';
   }
+}
+function applyCustomPrice() {
+  const mn = (document.getElementById("fp-min")?.value || "").trim();
+  const mx = (document.getElementById("fp-max")?.value || "").trim();
+  setPrice(mn, mx);
 }
 function closeChips() {
   CHIP_OPEN = "";
