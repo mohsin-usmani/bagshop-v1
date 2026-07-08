@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Catalogue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
@@ -11,8 +13,11 @@
 
   <div class="cartbar" id="cartbar" style="display:none">
     <div class="wrap">
-      <div><strong id="cartCount">0</strong> item(s) in cart</div>
-      <button class="btn amber" onclick="openCart()">View & Send Order</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span><strong id="cartCount">0</strong> item(s)</span>
+      </div>
+      <button class="btn amber" onclick="openCart()">View &amp; Order →</button>
     </div>
   </div>
 
