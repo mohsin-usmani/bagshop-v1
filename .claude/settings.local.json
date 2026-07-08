@@ -5,7 +5,11 @@
       "Bash(npm --version)",
       "PowerShell(npm *)",
       "PowerShell(wrangler *)",
-      "PowerShell($env:PATH = [Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" --version; & \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --version)"
+      "PowerShell($env:PATH = [Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" --version; & \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --version)",
+      "PowerShell(wrangler d1 *)",
+      "PowerShell(wrangler pages *)",
+      "WebFetch(domain:unsplash.com)",
+      "WebFetch(domain:images.unsplash.com)"
     ]
   }
 }

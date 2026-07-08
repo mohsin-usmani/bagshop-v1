@@ -86,38 +86,101 @@ function renderArticles() {
   if (!ARTICLES.length) { el.innerHTML = '<p class="muted">No articles yet.</p>'; return; }
   el.innerHTML = ARTICLES.map((a) => {
     const vs = a.variants.map((v) =>
-      '<div class="line"><div>' + esc(v.color || "") + ' · ' + esc(v.size || "") +
-      ' <span class="muted">(' + v.available_qty + ' in stock' + (v.price != null ? ', ' + esc(cur) + v.price : '') + ')</span></div>' +
-      '<span class="x" onclick="delVariant(' + jq(v.id) + ')">✕</span></div>').join("") || '<p class="muted" style="font-size:13px">No colours/sizes yet.</p>';
+      '<div class="line">' +
+        '<div style="flex:1;min-width:80px;font-size:13px">' + esc(v.color || '–') + ' · ' + esc(v.size || '–') + '</div>' +
+        '<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '" placeholder="Qty" style="width:62px;padding:5px 6px">' +
+        '<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="Price" style="width:76px;padding:5px 6px">' +
+        '<button class="btn sm ghost" style="padding:5px 8px;flex-shrink:0" onclick="saveVariant(' + jq(v.id) + ')">✓</button>' +
+        '<span class="x" style="flex-shrink:0;margin-left:0" onclick="delVariant(' + jq(v.id) + ')">✕</span>' +
+      '</div>').join("") || '<p class="muted" style="font-size:13px">No colours/sizes yet.</p>';
     const photos = (a.photos || []).map((p) =>
-      '<div class="t"><img src="' + esc(p.url) + '"><span class="rm" onclick="delPhoto(' + jq(p.id) + ')">✕</span></div>').join("");
+      '<div class="t">' +
+        '<img src="' + esc(p.url) + '">' +
+        (p.color ? '<div style="font-size:10px;text-align:center;color:var(--muted)">' + esc(p.color) + '</div>' : '') +
+        '<span class="rm" onclick="delPhoto(' + jq(p.id) + ')">✕</span>' +
+      '</div>').join("");
+
+    // known colors for this article
+    const knownColors = [...new Set(a.variants.map(v => v.color).filter(Boolean))];
+    const colorOpts = knownColors.map(c => '<option>' + esc(c) + '</option>').join('');
+
     return '<div class="card artcard">' +
-      '<div class="hd"><div><strong>' + esc(a.article_code) + '</strong> — ' + esc(a.name || "") + ' <span class="tag">' + esc(a.category) + '</span></div>' +
-      '<button class="btn danger sm" onclick="delArticle(' + jq(a.id) + ')">Delete</button></div>' +
+      // ── header ──
+      '<div class="hd">' +
+        '<div><strong>' + esc(a.article_code) + '</strong> — ' + esc(a.name || "") + ' <span class="tag">' + esc(a.category) + '</span></div>' +
+        '<div class="row-actions">' +
+          '<button class="btn sm ghost" onclick="toggleEdit(' + jq(a.id) + ')">Edit</button>' +
+          '<button class="btn danger sm" onclick="delArticle(' + jq(a.id) + ')">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      // ── inline edit form ──
+      '<div id="ef-' + a.id + '" style="display:none;border-top:1px solid var(--line);padding-top:12px;margin-bottom:10px">' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Article Code</label><input id="ec_' + a.id + '" value="' + esc(a.article_code) + '"></div>' +
+          '<div class="field"><label>Name</label><input id="en_' + a.id + '" value="' + esc(a.name || "") + '"></div>' +
+          '<div class="field"><label>Category</label><input id="ect_' + a.id + '" value="' + esc(a.category || "") + '" list="catList"></div>' +
+          '<div class="field"><label>Base Price</label><input id="ebp_' + a.id + '" type="number" value="' + (a.base_price ?? "") + '"></div>' +
+        '</div>' +
+        '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ea_' + a.id + '" ' + (a.is_active ? "checked" : "") + ' style="width:auto"> Active</label>' +
+          '<button class="btn sm" onclick="saveArticle(' + jq(a.id) + ')">Save changes</button>' +
+          '<button class="btn sm ghost" onclick="toggleEdit(' + jq(a.id) + ')">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+      // ── variants + photos ──
       '<div class="grid2"><div>' +
         '<div style="margin-bottom:8px">' + vs + '</div>' +
         '<div class="row-actions" style="align-items:end">' +
-          '<div style="width:100px"><label>Colour</label><input id="vc_' + a.id + '"></div>' +
-          '<div style="width:90px"><label>Size</label><input id="vs_' + a.id + '"></div>' +
-          '<div style="width:90px"><label>Price</label><input id="vp_' + a.id + '" type="number"></div>' +
-          '<div style="width:80px"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="0"></div>' +
+          '<div style="width:100px"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
+          '<div style="width:80px"><label>Size</label><input id="vs_' + a.id + '"></div>' +
+          '<div style="width:88px"><label>Price</label><input id="vp_' + a.id + '" type="number"></div>' +
+          '<div style="width:75px"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="0"></div>' +
           '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">Add</button>' +
         '</div></div>' +
-      '<div><label>Photos</label><div class="thumbs">' + photos + '</div>' +
-        '<div style="margin-top:8px"><input type="file" accept="image/*" onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
-        '<p class="muted" style="font-size:12px">Phone photos are fine. They are auto-shrunk before upload.</p></div>' +
-      '</div></div>';
+      '<div>' +
+        '<label>Photos</label>' +
+        '<div class="thumbs">' + photos + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">' +
+          '<div style="width:130px"><label>Photo colour</label>' +
+            '<select id="pc_' + a.id + '"><option value="">— any —</option>' + colorOpts + '</select>' +
+          '</div>' +
+          '<div><label>Choose photos</label><input type="file" accept="image/*" multiple onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
+        '</div>' +
+        '<p class="muted" style="font-size:12px;margin-top:6px">Tag each photo with its colour so customers see the right image when they switch colour.</p>' +
+      '</div></div></div>';
   }).join("");
+}
+
+function toggleEdit(id) {
+  const el = document.getElementById("ef-" + id);
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+async function saveArticle(id) {
+  const body = {
+    id,
+    article_code: val("ec_" + id),
+    name:         val("en_" + id),
+    category:     val("ect_" + id),
+    base_price:   val("ebp_" + id) ? Number(val("ebp_" + id)) : null,
+    description:  (document.getElementById("edd_" + id) || {}).value?.trim() || "",
+    is_active:    !!(document.getElementById("ea_" + id) || {}).checked,
+  };
+  if (!body.article_code || !body.category) return toast("Code and category are required");
+  const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (ok) { toast("Article updated"); toggleEdit(id); loadArticles(); }
+  else toast("Save failed");
 }
 
 function toggleAdd() { const f = document.getElementById("addForm"); f.style.display = f.style.display === "none" ? "block" : "none"; }
 
 async function createArticle() {
   const body = { article_code: na_code.value.trim(), name: na_name.value.trim(), category: na_cat.value.trim(),
-    base_price: na_price.value ? Number(na_price.value) : null, description: na_desc.value.trim() };
+    description: na_desc.value.trim() };
   if (!body.article_code || !body.category) return toast("Code and category are required");
   const { ok } = await api("/api/admin/articles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (ok) { toast("Article added"); na_code.value = na_name.value = na_cat.value = na_price.value = na_desc.value = ""; toggleAdd(); loadArticles(); }
+  if (ok) { toast("Article added"); na_code.value = na_name.value = na_cat.value = na_desc.value = ""; toggleAdd(); loadArticles(); }
   else toast("Failed");
 }
 async function delArticle(id) {
@@ -136,13 +199,31 @@ async function delVariant(id) {
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (ok) { toast("Removed"); loadArticles(); }
 }
+async function saveVariant(vid) {
+  const qEl = document.getElementById('vq2_' + vid);
+  const pEl = document.getElementById('vp2_' + vid);
+  let isActive = 1;
+  let varRef = null;
+  for (const a of ARTICLES) { const v = a.variants.find(x => x.id === vid); if (v) { isActive = v.is_active ? 1 : 0; varRef = v; break; } }
+  const newQty = qEl ? Number(qEl.value) : 0;
+  const newPrice = pEl && pEl.value.trim() !== '' ? Number(pEl.value) : null;
+  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ updates: [{ id: vid, available_qty: newQty, price: newPrice, is_active: isActive }] }) });
+  if (ok) { toast("Saved"); if (varRef) { varRef.available_qty = newQty; varRef.price = newPrice; } }
+  else toast("Save failed");
+}
 async function uploadPhoto(aid, input) {
-  const file = input.files[0]; if (!file) return;
-  toast("Uploading…");
-  const small = await compressImage(file);
-  const fd = new FormData(); fd.append("file", small); fd.append("article_id", aid);
-  const res = await fetch("/api/admin/photos", { method: "POST", body: fd });
-  if (res.ok) { toast("Photo added"); loadArticles(); } else toast("Upload failed");
+  const files = [...input.files]; if (!files.length) return;
+  const color = val("pc_" + aid);
+  toast("Uploading " + files.length + " photo(s)…");
+  for (const file of files) {
+    const small = await compressImage(file);
+    const fd = new FormData(); fd.append("file", small); fd.append("article_id", aid);
+    if (color) fd.append("color", color);
+    const res = await fetch("/api/admin/photos", { method: "POST", body: fd });
+    if (!res.ok) { toast("Upload failed"); loadArticles(); return; }
+  }
+  toast(files.length + " photo(s) added"); loadArticles();
 }
 async function delPhoto(id) {
   const { ok } = await api("/api/admin/photos?id=" + encodeURIComponent(id), { method: "DELETE" });
