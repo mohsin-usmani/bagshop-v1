@@ -1,3 +1,4 @@
+const FINEX_LOGO = '<svg class="brand-logo" width="36" height="36" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="20" fill="#0A0A0A" stroke="rgba(255,255,255,0.85)" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>';
 const TOKEN = qs("t");
 let DATA = null;
 let CUR = "Rs.";
@@ -48,11 +49,17 @@ function render() {
 
   if (first) {
     app.innerHTML =
-      '<div class="topbar"><div class="wrap">' +
-        '<div><div class="shopname">' + esc(DATA.shop.name) + '</div>' +
-        (DATA.customer ? '<div class="topbar-cust">' + esc(DATA.customer) + '</div>' : '') +
+      '<div class="topbar">' +
+        '<div class="topbar-orbs"><div class="torb t1"></div><div class="torb t2"></div></div>' +
+        '<div class="wrap">' +
+          '<div class="brand-row">' +
+            FINEX_LOGO +
+            '<div><div class="shopname">' + esc(DATA.shop.name) + '</div>' +
+            (DATA.customer ? '<div class="topbar-cust">Welcome, ' + esc(DATA.customer) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
         '</div>' +
-      '</div></div>' +
+      '</div>' +
       '<div class="filter-bar" id="filterBar">' +
         '<div class="fcat-row" id="catRow"></div>' +
         '<div class="fchips-row" id="fchipsRow">' +
