@@ -1,6 +1,6 @@
 import { json, isAdmin, getSettings } from "../_util.js";
 
-const ALLOWED = ["shop_name", "owner_phone", "currency", "show_prices", "default_link_hours"];
+const ALLOWED = ["shop_name", "owner_phone", "currency", "show_prices", "default_link_hours", "about_us", "instagram_url", "facebook_url"];
 
 export async function onRequestGet(context) {
   const { env } = context;

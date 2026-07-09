@@ -1,5 +1,7 @@
 let ARTICLES = [];
 let SETTINGS = {};
+let CAT_IMAGES = {};
+let CATEGORIES = [];
 
 // ---- tabs ----
 document.getElementById("tabs").addEventListener("click", (e) => {
@@ -11,7 +13,7 @@ document.getElementById("tabs").addEventListener("click", (e) => {
 
 async function loadAll() {
   await Promise.all([loadSettings(), loadArticles()]);
-  loadLinks(); loadOrders();
+  loadLinks(); loadOrders(); loadBanners(); loadCategories();
 }
 
 // ---- settings ----
@@ -25,10 +27,18 @@ async function loadSettings() {
   st_cur.value = SETTINGS.currency || "Rs.";
   st_hours.value = SETTINGS.default_link_hours || "4";
   st_show.value = SETTINGS.show_prices || "1";
+  if (document.getElementById("st_about")) document.getElementById("st_about").value = SETTINGS.about_us || "";
+  if (document.getElementById("st_ig")) document.getElementById("st_ig").value = SETTINGS.instagram_url || "";
+  if (document.getElementById("st_fb")) document.getElementById("st_fb").value = SETTINGS.facebook_url || "";
 }
 async function saveSettings() {
-  const body = { shop_name: st_name.value, owner_phone: st_phone.value, currency: st_cur.value,
-    default_link_hours: st_hours.value, show_prices: st_show.value };
+  const body = {
+    shop_name: st_name.value, owner_phone: st_phone.value, currency: st_cur.value,
+    default_link_hours: st_hours.value, show_prices: st_show.value,
+    about_us: (document.getElementById("st_about") || {}).value || "",
+    instagram_url: (document.getElementById("st_ig") || {}).value || "",
+    facebook_url: (document.getElementById("st_fb") || {}).value || "",
+  };
   const { ok, data } = await api("/api/admin/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (ok) { SETTINGS = data.settings; toast("Settings saved"); document.getElementById("hdrName").textContent = (SETTINGS.shop_name || "Shop") + " — Admin"; }
   else toast("Save failed");
@@ -36,9 +46,12 @@ async function saveSettings() {
 
 // ---- articles + stock ----
 async function loadArticles() {
-  const { data } = await api("/api/admin/articles");
-  if (!data || data.error) return authFail(data);
-  ARTICLES = data.articles || [];
+  const [artRes, catImgRes] = await Promise.all([api("/api/admin/articles"), api("/api/admin/category-images")]);
+  if (!artRes.data || artRes.data.error) return authFail(artRes.data);
+  ARTICLES = artRes.data.articles || [];
+  const rows = (catImgRes.data && catImgRes.data.category_images) || [];
+  CAT_IMAGES = {};
+  rows.forEach(r => { CAT_IMAGES[r.category] = r.image_url; });
   renderStock(); renderArticles(); renderCatList();
 }
 
@@ -78,6 +91,13 @@ async function saveStock() {
 function renderCatList() {
   const cats = [...new Set(ARTICLES.map((a) => a.category).filter(Boolean))];
   document.getElementById("catList").innerHTML = cats.map((c) => '<option value="' + esc(c) + '">').join("");
+  // banner link datalist: categories + article codes
+  const bnrList = document.getElementById("bnrLinkList");
+  if (bnrList) {
+    bnrList.innerHTML =
+      cats.map(c => '<option value="' + esc(c) + '" label="Category: ' + esc(c) + '">').join("") +
+      ARTICLES.map(a => '<option value="' + esc(a.article_code) + '" label="' + esc(a.article_code) + ' — ' + esc(a.name || '') + '">').join("");
+  }
 }
 
 function renderArticles() {
@@ -279,6 +299,121 @@ async function loadOrders() {
   el.innerHTML = '<table><thead><tr><th>When</th><th>Customer</th><th>Items</th><th>Est. total</th></tr></thead><tbody>' +
     data.orders.map((o) => '<tr><td>' + fmt(o.created_at) + '</td><td>' + esc(o.customer_label || "—") + '</td><td>' + o.item_count + '</td><td>' + esc(cur) + (o.est_total || 0) + '</td></tr>').join("") +
     '</tbody></table>';
+}
+
+// ---- banners ----
+async function loadBanners() {
+  const { data } = await api("/api/admin/banners");
+  if (!data || data.error) return;
+  const banners = data.banners || [];
+  const el = document.getElementById("bannerList");
+  if (!el) return;
+  if (!banners.length) { el.innerHTML = '<p class="muted">No banners yet. Upload one above.</p>'; }
+  else {
+    el.innerHTML = banners.map(b =>
+      '<div class="banner-item">' +
+        '<div class="banner-thumb"><img src="' + esc(b.image_url) + '" alt=""></div>' +
+        '<div class="banner-info">' +
+          '<label>Link (category name or URL)</label>' +
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
+            '<input class="banner-link-input" id="bl_' + b.id + '" value="' + esc(b.link_url || '') + '" placeholder="e.g. Handbag">' +
+            '<button class="btn sm" onclick="saveBannerLink(' + jq(b.id) + ')">Save</button>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal">' +
+              '<input type="checkbox" ' + (b.is_active ? 'checked' : '') + ' onchange="setBannerActive(' + jq(b.id) + ',this.checked)" style="width:auto"> Visible' +
+            '</label>' +
+            '<button class="btn danger sm" onclick="deleteBanner(' + jq(b.id) + ')">Delete</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+  }
+  renderCatImgList();
+}
+
+async function uploadBanner() {
+  const fileInput = document.getElementById("bnr_file");
+  const link = document.getElementById("bnr_link").value.trim();
+  if (!fileInput.files.length) return toast("Choose a photo first");
+  const file = await compressImage(fileInput.files[0], 1600, 0.85);
+  toast("Uploading…");
+  const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
+  const res = await fetch("/api/admin/banners", { method: "POST", body: fd });
+  if (!res.ok) return toast("Upload failed");
+  toast("Banner added");
+  fileInput.value = "";
+  document.getElementById("bnr_link").value = "";
+  document.getElementById("bnr_preview").style.display = "none";
+  loadBanners();
+}
+
+async function saveBannerLink(id) {
+  const val = document.getElementById("bl_" + id)?.value || "";
+  const { ok } = await api("/api/admin/banners", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, link_url: val }) });
+  if (ok) toast("Saved"); else toast("Failed");
+}
+
+async function setBannerActive(id, active) {
+  await api("/api/admin/banners", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, is_active: active }) });
+}
+
+async function deleteBanner(id) {
+  if (!confirm("Delete this banner?")) return;
+  const { ok } = await api("/api/admin/banners?id=" + encodeURIComponent(id), { method: "DELETE" });
+  if (ok) { toast("Deleted"); loadBanners(); } else toast("Failed");
+}
+
+// Banner file preview
+document.addEventListener("DOMContentLoaded", () => {
+  const fi = document.getElementById("bnr_file");
+  if (fi) fi.addEventListener("change", () => {
+    if (!fi.files.length) return;
+    const url = URL.createObjectURL(fi.files[0]);
+    document.getElementById("bnr_preview_img").src = url;
+    document.getElementById("bnr_preview").style.display = "block";
+  });
+});
+
+// ---- category images ----
+function renderCatImgList() {
+  const el = document.getElementById("catImgList");
+  if (!el) return;
+  const cats = [...new Set(ARTICLES.map(a => a.category).filter(Boolean))];
+  if (!cats.length) { el.innerHTML = '<p class="muted">No categories yet. Add articles first.</p>'; return; }
+  el.innerHTML = cats.map(c => {
+    const img = CAT_IMAGES[c];
+    return '<div class="cat-img-item">' +
+      '<div class="cat-img-thumb">' +
+        (img ? '<img src="' + esc(img) + '" alt="' + esc(c) + '">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)">No image</div>') +
+      '</div>' +
+      '<div style="flex:1"><strong style="font-size:13px">' + esc(c) + '</strong>' +
+        (img ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Image set</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:2px">No image set</div>') +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<label class="btn sm ghost" style="cursor:pointer;margin:0">Upload<input type="file" accept="image/*" style="display:none;width:0" onchange="uploadCatImg(' + jq(c) + ',this)"></label>' +
+        (img ? '<button class="btn danger sm" onclick="deleteCatImg(' + jq(c) + ')">Remove</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function uploadCatImg(category, input) {
+  if (!input.files.length) return;
+  const file = await compressImage(input.files[0], 800, 0.85);
+  toast("Uploading…");
+  const fd = new FormData(); fd.append("file", file); fd.append("category", category);
+  const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
+  if (!res.ok) return toast("Upload failed");
+  const data = await res.json();
+  CAT_IMAGES[category] = data.image_url;
+  toast("Image saved");
+  renderCatImgList();
+}
+
+async function deleteCatImg(category) {
+  const { ok } = await api("/api/admin/category-images?category=" + encodeURIComponent(category), { method: "DELETE" });
+  if (ok) { delete CAT_IMAGES[category]; toast("Removed"); renderCatImgList(); }
 }
 
 // ---- utils ----

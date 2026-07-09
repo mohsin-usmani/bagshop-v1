@@ -4,24 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FinEx Admin</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%230A0A0A' stroke='white' stroke-width='5'/%3E%3Ctext x='50' y='68' text-anchor='middle' fill='white' font-family='Arial Black%2Csans-serif' font-size='30' font-weight='900'%3EFinEx%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%231B1B1B' stroke='white' stroke-width='5'/%3E%3Ctext x='50' y='68' text-anchor='middle' fill='white' font-family='Arial Black%2Csans-serif' font-size='30' font-weight='900'%3EFinEx%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-<div class="topbar"><div class="topbar-orbs"><div class="torb t1"></div><div class="torb t2"></div></div><div class="wrap">
-  <div class="brand-row">
-    <svg class="brand-logo" width="34" height="34" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="20" fill="#0A0A0A" stroke="rgba(255,255,255,0.85)" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>
-    <div class="shopname" id="hdrName">Admin</div>
-  </div>
-  <a href="#" onclick="loadAll();return false" style="color:rgba(255,255,255,.7);font-size:13px;text-decoration:none">↻ Refresh</a>
-</div></div>
 
-<div class="wrap">
+<div class="admin-topbar">
+  <div class="wrap">
+    <div class="admin-brand">
+      <svg width="30" height="30" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="20" fill="#1B1B1B" stroke="rgba(255,255,255,0.85)" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>
+      <div class="admin-brand-name" id="hdrName">Admin</div>
+    </div>
+    <a href="#" onclick="loadAll();return false" style="color:rgba(255,255,255,.7);font-size:13px;text-decoration:none">↻ Refresh</a>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top:0">
   <div class="tabs" id="tabs">
     <div class="tab on" data-p="stock">Stock</div>
     <div class="tab" data-p="articles">Articles</div>
+    <div class="tab" data-p="categories">Categories</div>
+    <div class="tab" data-p="banners">Banners</div>
     <div class="tab" data-p="links">Customer Links</div>
     <div class="tab" data-p="orders">Orders</div>
     <div class="tab" data-p="settings">Settings</div>
@@ -29,14 +32,14 @@
 
   <!-- STOCK -->
   <div class="panel on" id="p-stock">
-    <div class="hd"><h3>Update stock</h3><button class="btn amber" onclick="saveStock()">Save changes</button></div>
-    <p class="muted" style="margin-top:0">Change any quantity or price, then Save. Customers see it instantly.</p>
+    <div class="hd"><h3>Update stock</h3><button class="btn" onclick="saveStock()">Save changes</button></div>
+    <p class="muted" style="margin-top:0;margin-bottom:12px">Change any quantity or price, then Save. Customers see it instantly.</p>
     <div id="stockTable"></div>
   </div>
 
   <!-- ARTICLES -->
   <div class="panel" id="p-articles">
-    <div class="hd"><h3>Articles</h3><button class="btn" onclick="toggleAdd()">+ Add new bag</button></div>
+    <div class="hd"><h3>Articles</h3><button class="btn" onclick="toggleAdd()">+ Add new article</button></div>
     <div class="card artcard" id="addForm" style="display:none">
       <div class="grid2">
         <div class="field"><label>Article code *</label><input id="na_code" placeholder="BAG-1023"></div>
@@ -48,6 +51,57 @@
     </div>
     <datalist id="catList"></datalist>
     <div id="artList"></div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div class="panel" id="p-categories">
+    <div class="hd"><h3>Categories</h3><button class="btn" onclick="showAddCatForm()">+ Add category</button></div>
+    <p class="muted" style="margin-top:0;margin-bottom:16px">Create, rename, or delete categories. Renaming updates all articles automatically. Deleting moves articles to "Uncategorized".</p>
+    <div class="card artcard" id="addCatForm" style="display:none;margin-bottom:16px">
+      <div class="field"><label>Category name</label><input id="new_cat_name" placeholder="e.g. Handbag"></div>
+      <div class="row-actions">
+        <button class="btn" onclick="createCategory()">Create</button>
+        <button class="btn ghost" onclick="hideAddCatForm()">Cancel</button>
+      </div>
+    </div>
+    <div id="catManagerList"></div>
+  </div>
+
+  <!-- BANNERS -->
+  <div class="panel" id="p-banners">
+    <div class="hd"><h3>Homepage Banners</h3></div>
+    <p class="muted" style="margin-bottom:16px">Upload large photos that appear on the homepage slider. Set a link for each — enter a category name (e.g. <strong>Handbag</strong>) or leave blank. Admin preview shows below the upload form.</p>
+
+    <!-- Add banner form -->
+    <div class="card artcard" style="margin-bottom:20px">
+      <div class="field"><label>Banner photo</label><input type="file" accept="image/*" id="bnr_file"></div>
+      <div class="field">
+        <label>Link — pick a category OR a product (or leave blank for no action)</label>
+        <input id="bnr_link" placeholder="e.g. Handbag  or  BAG-1023" list="bnrLinkList">
+        <datalist id="bnrLinkList"></datalist>
+        <p class="muted" style="font-size:12px;margin-top:4px">Type a <strong>category name</strong> to open that category, or an <strong>article code</strong> (e.g. BAG-1023) to open that product directly.</p>
+      </div>
+
+      <!-- Live preview -->
+      <div id="bnr_preview" style="display:none;margin-bottom:12px">
+        <label>Preview</label>
+        <div style="width:100%;max-width:400px;aspect-ratio:16/7;background:var(--bg2);border-radius:4px;overflow:hidden;border:1px solid var(--line)">
+          <img id="bnr_preview_img" style="width:100%;height:100%;object-fit:cover">
+        </div>
+      </div>
+
+      <button class="btn" onclick="uploadBanner()">Add Banner</button>
+    </div>
+
+    <h4 style="margin-bottom:12px">Current banners</h4>
+    <div id="bannerList"></div>
+
+    <!-- Category images section -->
+    <div style="margin-top:32px">
+      <div class="hd"><h3>Category Images</h3></div>
+      <p class="muted" style="margin-bottom:16px">Set a photo for each category tile on the homepage. Square images work best.</p>
+      <div id="catImgList"></div>
+    </div>
   </div>
 
   <!-- LINKS -->
@@ -62,29 +116,33 @@
       <button class="btn" onclick="createLink()">Create link</button>
     </div>
     <div id="linkResult"></div>
-    <h3 style="margin-top:18px">Active & recent links</h3>
+    <h3 style="margin-top:18px">Active &amp; recent links</h3>
     <div id="linkList"></div>
   </div>
 
   <!-- ORDERS -->
   <div class="panel" id="p-orders">
     <h3>Orders received</h3>
-    <p class="muted" style="margin-top:0">A copy of every cart sent to you. The conversation itself is on WhatsApp.</p>
+    <p class="muted" style="margin-top:0;margin-bottom:12px">A copy of every cart sent to you. The conversation itself is on WhatsApp.</p>
     <div id="orderList"></div>
   </div>
 
   <!-- SETTINGS -->
   <div class="panel" id="p-settings">
     <h3>Settings</h3>
-    <div class="card artcard" style="max-width:520px">
+    <div class="card artcard" style="max-width:560px">
       <div class="field"><label>Shop name</label><input id="st_name"></div>
-      <div class="field"><label>Your WhatsApp number (orders go here — country code, no +)</label><input id="st_phone" placeholder="9198xxxxxx12"></div>
+      <div class="field"><label>Your WhatsApp number (orders go here — country code, no +)</label><input id="st_phone" placeholder="919198xxxxxx12"></div>
       <div class="grid2">
         <div class="field"><label>Currency symbol</label><input id="st_cur"></div>
         <div class="field"><label>Default link hours</label><input id="st_hours" type="number"></div>
       </div>
       <div class="field"><label>Show prices in catalogue?</label>
-        <select id="st_show"><option value="1">Yes — show prices</option><option value="0">No — hide prices</option></select></div>
+        <select id="st_show"><option value="1">Yes — show prices</option><option value="0">No — hide prices</option></select>
+      </div>
+      <div class="field"><label>About Us (shown in footer &amp; mobile menu)</label><textarea id="st_about" rows="3" style="resize:vertical"></textarea></div>
+      <div class="field"><label>Instagram URL</label><input id="st_ig" placeholder="https://instagram.com/yourshop"></div>
+      <div class="field"><label>Facebook URL</label><input id="st_fb" placeholder="https://facebook.com/yourshop"></div>
       <button class="btn" onclick="saveSettings()">Save settings</button>
     </div>
   </div>
