@@ -116,9 +116,12 @@ async function init() {
   SHOW_PRICES = !!data.shop.show_prices;
   document.getElementById('navShopName').textContent = data.shop.name || '';
   document.getElementById('mobShopName').textContent = data.shop.name || '';
+  loadCartFromStorage();
   renderNav();
   renderMobMenu();
-  goHome();
+  // Check if URL specifies a category to open directly
+  const urlCat = qs('cat');
+  if (urlCat) { goCategory(decodeURIComponent(urlCat)); } else { goHome(); }
 }
 
 function showExpired() {
@@ -175,8 +178,6 @@ function renderNav() {
     '<button class="nav-cat-link' + (VIEW === 'home' && !CAT_FILTER ? ' active' : '') + '" onclick="goHome()">Home</button>' +
     cats.map(c =>
       '<button class="nav-cat-link' + (VIEW === 'catalogue' && CAT_FILTER === c ? ' active' : '') + '"' +
-      ' onmouseenter="openDesktopDropdown(\'' + jq(c) + '\')"' +
-      ' onmouseleave="scheduleCloseDD()"' +
       ' onclick="goCategory(\'' + jq(c) + '\')">' + esc(c) + '</button>'
     ).join('') +
     '<button class="nav-cat-link' + (VIEW === 'catalogue' && !CAT_FILTER ? ' active' : '') + '" onclick="goCategory(\'\')">Shop All</button>';
@@ -187,62 +188,10 @@ function renderNav() {
   if (badge) { badge.textContent = total; badge.style.display = total ? 'flex' : 'none'; }
 }
 
-// Desktop dropdown — with fade + delay
-function openDesktopDropdown(cat) {
-  clearTimeout(window._ddTimer);
-  clearTimeout(window._ddOpenTimer);
-  window._ddOpenTimer = setTimeout(() => {
-    const dd = document.getElementById('desktopDropdown');
-    if (!dd || !DATA) return;
-    const articles = DATA.articles.filter(a => a.category === cat);
-    const allVars = articles.flatMap(a => a.variants || []);
-    const colors = [...new Set(allVars.map(v => v.color).filter(Boolean))];
-    dd.style.top = (document.querySelector('.navbar').offsetHeight) + 'px';
-    dd.innerHTML =
-      '<div class="dd-inner">' +
-        '<div class="dd-col">' +
-          '<div class="dd-label">TYPE</div>' +
-          '<div class="dd-grid">' +
-            articles.slice(0, 8).map(a => {
-              const photo = resolvePhotos(a, '')[0];
-              return '<div class="dd-item" onclick="openDetail(\'' + jq(a.id) + '\');closeDesktopDropdown()">' +
-                '<div class="dd-item-img">' +
-                  (photo ? '<img src="' + esc(photo.url) + '" alt="" loading="lazy">' : '<div class="cat-tile-placeholder">' + esc((a.name||'')[0]||'') + '</div>') +
-                '</div>' +
-                '<div class="dd-item-name">' + esc(a.name || a.article_code) + '</div>' +
-              '</div>';
-            }).join('') +
-          '</div>' +
-          '<span class="dd-shop-all" onclick="goCategory(\'' + jq(cat) + '\');closeDesktopDropdown()">Shop all ' + esc(cat) + ' →</span>' +
-        '</div>' +
-        (colors.length
-          ? '<div class="dd-col">' +
-              '<div class="dd-label">COLOUR</div>' +
-              '<div class="dd-colour-grid">' +
-                colors.slice(0, 10).map(c =>
-                  '<div class="dd-colour-item" onclick="goCategory(\'' + jq(cat) + '\',\'' + jq(c) + '\');closeDesktopDropdown()">' +
-                    '<div class="dd-colour-swatch" style="background:' + (COLOR_CSS[c] || '#ccc') + '"></div>' +
-                    '<div class="dd-colour-name">' + esc(c) + '</div>' +
-                  '</div>'
-                ).join('') +
-              '</div>' +
-            '</div>'
-          : '') +
-      '</div>';
-    dd.classList.add('open');
-    dd.style.display = 'block';
-  }, 200);
-}
-function closeDesktopDropdown() {
-  clearTimeout(window._ddOpenTimer);
-  const dd = document.getElementById('desktopDropdown');
-  if (!dd) return;
-  dd.classList.remove('open');
-  setTimeout(() => { if (!dd.classList.contains('open')) dd.style.display = 'none'; }, 350);
-}
-function scheduleCloseDD() {
-  window._ddTimer = setTimeout(closeDesktopDropdown, 200);
-}
+// Desktop dropdown disabled — categories navigate directly on click
+function openDesktopDropdown() {}
+function closeDesktopDropdown() {}
+function scheduleCloseDD() {}
 
 // Search
 function toggleNavSearch() {
@@ -299,7 +248,7 @@ function renderMobMenu() {
 
   document.getElementById('mobCatsList').innerHTML =
     cats.map(c =>
-      '<div class="mob-cat-item" onclick="openMobSubCat(\'' + jq(c) + '\')">' +
+      '<div class="mob-cat-item" onclick="goCategory(\'' + jq(c) + '\')">' +
         '<span>' + esc(c.toUpperCase()) + '</span>' +
         '<span class="mob-arr">›</span>' +
       '</div>'
@@ -412,7 +361,9 @@ function taglineHTML() {
 }
 
 function newArrivalsHTML() {
-  const articles = (DATA.articles || []).slice(0, 8);
+  const all = DATA.articles || [];
+  const flagged = all.filter(a => a.is_new_arrival);
+  const articles = flagged.length ? flagged.slice(0, 8) : all.slice(0, 8);
   if (!articles.length) return '';
   return '<div class="new-arrivals-section">' +
     '<div class="new-arrivals-head">' +
@@ -580,6 +531,20 @@ function handleBannerClick(link) {
   if (link.startsWith('http')) { window.open(link, '_blank'); }
 }
 
+// ── Category hero ──
+function catHeroHTML() {
+  if (!CAT_FILTER || !DATA) return '';
+  const catImages = DATA.category_images || {};
+  const img = catImages[CAT_FILTER];
+  if (!img) return '';
+  return '<div class="cat-hero">' +
+    '<img class="cat-hero-img" src="' + esc(img) + '" alt="' + esc(CAT_FILTER) + '">' +
+    '<div class="cat-hero-text">' +
+      '<div class="cat-hero-name">' + esc(CAT_FILTER.toUpperCase()) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 // ── Catalogue Page ──
 function renderCataloguePage() {
   const articles = getFiltered();
@@ -588,6 +553,7 @@ function renderCataloguePage() {
   const filterCount = activeFilterCount();
 
   app.innerHTML =
+    catHeroHTML() +
     '<div class="cat-page">' +
       '<div class="cat-toolbar">' +
         '<button class="toolbar-btn" onclick="openMobFilters()">' +
@@ -883,32 +849,26 @@ function goPhoto(aid, idx) {
   const el = document.getElementById('pw-' + aid); if (el) el.innerHTML = photoWrapHTML(a);
 }
 
-// ── Product modal ──
+// ── Product page navigation ──
 function openDetail(aid) {
-  const a = DATA.articles.find(x => x.id === aid); if (!a) return;
-  MODAL_AID = aid;
-  const colors = [...new Set(a.variants.map(v => v.color).filter(Boolean))];
-  const prev = SELECTION[aid] || {};
-  const defaultColor =
-    (FILTER.color && colors.includes(FILTER.color)) ? FILTER.color :
-    (prev.color && colors.includes(prev.color)) ? prev.color :
-    colors[0] || '';
-  const colVarsAvail = a.variants.filter(v => v.color === defaultColor && v.available_qty > 0);
-  let defaultSize = null;
-  if (FILTER.size && colVarsAvail.find(v => v.size === FILTER.size)) defaultSize = FILTER.size;
-  else if (colVarsAvail.length === 1) defaultSize = colVarsAvail[0].size;
-  else if (prev.size && colVarsAvail.find(v => v.size === prev.size)) defaultSize = prev.size;
-  SELECTION[aid] = { color: defaultColor, size: defaultSize, qty: prev.qty || 1 };
-  PHOTO_IDX[aid] = 0;
-  document.querySelector('#prodModal .prod-modal-body').innerHTML = detailHTML(a);
-  document.getElementById('prodModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  attachModalSwipe();
+  saveCartToStorage();
+  window.location.href = '/product.html?id=' + encodeURIComponent(aid) + '&t=' + encodeURIComponent(TOKEN);
 }
 function closeDetail() {
   document.getElementById('prodModal').classList.remove('open');
   document.body.style.overflow = '';
   MODAL_AID = null;
+}
+
+// ── localStorage cart persistence ──
+function saveCartToStorage() {
+  try { localStorage.setItem('bag_cart_' + TOKEN, JSON.stringify(CART)); } catch(e) {}
+}
+function loadCartFromStorage() {
+  try {
+    const raw = localStorage.getItem('bag_cart_' + TOKEN);
+    if (raw) { const c = JSON.parse(raw); Object.assign(CART, c); }
+  } catch(e) {}
 }
 function refreshModal() {
   if (!MODAL_AID) return;
@@ -1153,6 +1113,7 @@ function addToCart(aid) {
   if (CART[v.id]) CART[v.id].qty = Math.min(CART[v.id].qty + qty, v.available_qty);
   else CART[v.id] = { qty, label, price };
   SELECTION[aid].qty = 1;
+  saveCartToStorage();
   toast('Added to cart');
   renderCart();
   refreshModal();
@@ -1180,6 +1141,7 @@ function renderCart() {
 
 function removeItem(id) {
   delete CART[id];
+  saveCartToStorage();
   renderCart();
   if (DATA) {
     const a = DATA.articles.find(x => (x.variants || []).some(v => v.id === id));

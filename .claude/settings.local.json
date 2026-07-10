@@ -41,7 +41,10 @@
       "Bash(grep -o 'data-pid=\"[^\"]*\"[\\\\s\\\\S]\\\\{0,1500\\\\}' /c/Users/sw/Desktop/bag/bagshop-v1/bagshop-v1/design-reference/samsonite-scrape/www.samsonite.in/backpacks/index.html)",
       "Bash(node extract-products2.mjs __TRACKED_VAR__/backpacks/index.html backpacks-plp)",
       "Bash(node -e \"console.log\\(JSON.parse\\(require\\('fs'\\).readFileSync\\('backpacks-products.json','utf-8'\\)\\).length\\)\")",
-      "Bash(DEST=\"/c/Users/sw/Desktop/bag/bagshop-v1/bagshop-v1/design-reference/samsonite-scrape/www.samsonite.in\" *)"
+      "Bash(DEST=\"/c/Users/sw/Desktop/bag/bagshop-v1/bagshop-v1/design-reference/samsonite-scrape/www.samsonite.in\" *)",
+      "Bash(node --check public/assets/admin.js)",
+      "Bash(node --check public/assets/common.js)",
+      "Bash(node --check public/assets/catalog.js)"
     ]
   }
 }

@@ -2,6 +2,12 @@ let ARTICLES = [];
 let SETTINGS = {};
 let CAT_IMAGES = {};
 let CATEGORIES = [];
+let WIZARD_AID = null;
+let EDIT_MODAL_AID = null;
+let AUTH_FAIL_FIRED = false; // guard: only run authFail logic once
+
+// Any api() call that hits a CF Access redirect fires this event.
+window.addEventListener("apiauthfail", e => authFail(e.detail));
 
 // ---- tabs ----
 document.getElementById("tabs").addEventListener("click", (e) => {
@@ -12,14 +18,22 @@ document.getElementById("tabs").addEventListener("click", (e) => {
 });
 
 async function loadAll() {
-  await Promise.all([loadSettings(), loadArticles()]);
+  AUTH_FAIL_FIRED = false;
+  try {
+    await Promise.all([loadSettings(), loadArticles()]);
+  } catch (_) {
+    authFail({ error: "auth", reason: "no_session" });
+    return;
+  }
+  if (AUTH_FAIL_FIRED) return; // auth failed inside one of the loaders
   loadLinks(); loadOrders(); loadBanners(); loadCategories();
 }
 
 // ---- settings ----
 async function loadSettings() {
   const { data } = await api("/api/admin/settings");
-  if (!data || data.error) return authFail(data);
+  if (!data) return; // timeout — loadArticles will show retry button
+  if (data.error) return authFail(data);
   SETTINGS = data.settings || {};
   document.getElementById("hdrName").textContent = (SETTINGS.shop_name || "Shop") + " — Admin";
   st_name.value = SETTINGS.shop_name || "";
@@ -47,34 +61,70 @@ async function saveSettings() {
 // ---- articles + stock ----
 async function loadArticles() {
   const [artRes, catImgRes] = await Promise.all([api("/api/admin/articles"), api("/api/admin/category-images")]);
-  if (!artRes.data || artRes.data.error) return authFail(artRes.data);
-  ARTICLES = artRes.data.articles || [];
+  if (!artRes.data) {
+    const el = document.getElementById("stockTable");
+    if (el) el.innerHTML =
+      '<p style="color:#555;font-size:14px">Took too long to load — the server may be waking up.' +
+      ' <button class="btn sm" onclick="loadArticles()" style="margin-left:8px">Retry</button></p>';
+    return;
+  }
+  if (artRes.data.error) return authFail(artRes.data);
+  ARTICLES = (artRes.data.articles || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
   const rows = (catImgRes.data && catImgRes.data.category_images) || [];
   CAT_IMAGES = {};
   rows.forEach(r => { CAT_IMAGES[r.category] = r.image_url; });
-  renderStock(); renderArticles(); renderCatList();
+  renderStock(); renderCatList();
+  if (EDIT_MODAL_AID) refreshEditModal();
 }
 
 function allVariants() {
   const rows = [];
-  ARTICLES.forEach((a) => a.variants.forEach((v) => rows.push({ a, v })));
+  ARTICLES.forEach((a) => (a.variants || []).forEach((v) => rows.push({ a, v })));
   return rows;
 }
 
 function renderStock() {
-  const rows = allVariants();
   const cur = SETTINGS.currency || "Rs.";
-  if (!rows.length) { document.getElementById("stockTable").innerHTML = '<p class="muted">No articles yet. Add one in the Articles tab.</p>'; return; }
-  document.getElementById("stockTable").innerHTML =
-    '<table><thead><tr><th>Bag</th><th>Colour</th><th>Size</th><th>Price (' + esc(cur) + ')</th><th>Qty</th><th>Live</th></tr></thead><tbody>' +
+  const el = document.getElementById("stockTable");
+  if (!el) return;
+  const rawQ = ((document.getElementById("stockSearch") || {}).value || "").trim().toLowerCase();
+  const sortVal = ((document.getElementById("stockSort") || {}).value) || "newest";
+
+  let articles = [...ARTICLES];
+  if (sortVal === "az")       articles.sort((a, b) => (a.name || a.article_code || "").localeCompare(b.name || b.article_code || ""));
+  else if (sortVal === "za")  articles.sort((a, b) => (b.name || b.article_code || "").localeCompare(a.name || a.article_code || ""));
+  else if (sortVal === "oldest") articles.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+  else if (sortVal === "category") articles.sort((a, b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
+  else articles.sort((a, b) => (b.created_at || 0) - (a.created_at || 0)); // newest
+
+  const allRows = [];
+  articles.forEach(a => (a.variants || []).forEach(v => allRows.push({ a, v })));
+
+  const rows = allRows.filter(({ a }) =>
+    !rawQ ||
+    (a.article_code || "").toLowerCase().includes(rawQ) ||
+    (a.name || "").toLowerCase().includes(rawQ) ||
+    (a.category || "").toLowerCase().includes(rawQ)
+  );
+  if (!rows.length) {
+    el.innerHTML = rawQ
+      ? '<p class="muted">No results for that search.</p>'
+      : '<p class="muted">No articles yet. Use <strong>Add Product</strong> to add one.</p>';
+    return;
+  }
+  el.innerHTML =
+    '<table><thead><tr><th>Bag</th><th>Colour</th><th>Size</th><th>Price (' + esc(cur) + ')</th><th>Qty</th><th>Live</th><th></th></tr></thead><tbody>' +
     rows.map(({ a, v }) =>
       '<tr data-id="' + v.id + '">' +
       '<td><strong>' + esc(a.article_code) + '</strong><br><span class="muted" style="font-size:12px">' + esc(a.name || "") + '</span></td>' +
-      '<td>' + esc(v.color || "") + '</td><td>' + esc(v.size || "") + '</td>' +
+      '<td>' + esc(v.color || "") + '</td>' +
+      '<td>' + esc(v.size || "") + '</td>' +
       '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '"></td>' +
       '<td><input class="qtybox qty-in" type="number" value="' + v.available_qty + '"></td>' +
       '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' style="width:auto"></td>' +
-      '</tr>').join("") + '</tbody></table>';
+      '<td><button class="btn sm ghost" style="padding:4px 10px;white-space:nowrap" onclick="openEditModal(' + jq(a.id) + ')">✏ Edit</button></td>' +
+      '</tr>'
+    ).join("") + '</tbody></table>';
 }
 
 async function saveStock() {
@@ -100,113 +150,301 @@ function renderCatList() {
   }
 }
 
-function renderArticles() {
-  const cur = SETTINGS.currency || "Rs.";
-  const el = document.getElementById("artList");
-  if (!ARTICLES.length) { el.innerHTML = '<p class="muted">No articles yet.</p>'; return; }
-  el.innerHTML = ARTICLES.map((a) => {
-    const vs = a.variants.map((v) =>
-      '<div class="line">' +
-        '<div style="flex:1;min-width:80px;font-size:13px">' + esc(v.color || '–') + ' · ' + esc(v.size || '–') + '</div>' +
-        '<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '" placeholder="Qty" style="width:62px;padding:5px 6px">' +
-        '<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="Price" style="width:76px;padding:5px 6px">' +
-        '<button class="btn sm ghost" style="padding:5px 8px;flex-shrink:0" onclick="saveVariant(' + jq(v.id) + ')">✓</button>' +
-        '<span class="x" style="flex-shrink:0;margin-left:0" onclick="delVariant(' + jq(v.id) + ')">✕</span>' +
-      '</div>').join("") || '<p class="muted" style="font-size:13px">No colours/sizes yet.</p>';
-    const photos = (a.photos || []).map((p) =>
-      '<div class="t">' +
-        '<img src="' + esc(p.url) + '">' +
-        (p.color ? '<div style="font-size:10px;text-align:center;color:var(--muted)">' + esc(p.color) + '</div>' : '') +
-        '<span class="rm" onclick="delPhoto(' + jq(p.id) + ')">✕</span>' +
-      '</div>').join("");
-
-    // known colors for this article
-    const knownColors = [...new Set(a.variants.map(v => v.color).filter(Boolean))];
-    const colorOpts = knownColors.map(c => '<option>' + esc(c) + '</option>').join('');
-
-    return '<div class="card artcard">' +
-      // ── header ──
-      '<div class="hd">' +
-        '<div><strong>' + esc(a.article_code) + '</strong> — ' + esc(a.name || "") + ' <span class="tag">' + esc(a.category) + '</span></div>' +
-        '<div class="row-actions">' +
-          '<button class="btn sm ghost" onclick="toggleEdit(' + jq(a.id) + ')">Edit</button>' +
-          '<button class="btn danger sm" onclick="delArticle(' + jq(a.id) + ')">Delete</button>' +
-        '</div>' +
-      '</div>' +
-      // ── inline edit form ──
-      '<div id="ef-' + a.id + '" style="display:none;border-top:1px solid var(--line);padding-top:12px;margin-bottom:10px">' +
-        '<div class="grid2">' +
-          '<div class="field"><label>Article Code</label><input id="ec_' + a.id + '" value="' + esc(a.article_code) + '"></div>' +
-          '<div class="field"><label>Name</label><input id="en_' + a.id + '" value="' + esc(a.name || "") + '"></div>' +
-          '<div class="field"><label>Category</label><input id="ect_' + a.id + '" value="' + esc(a.category || "") + '" list="catList"></div>' +
-          '<div class="field"><label>Base Price</label><input id="ebp_' + a.id + '" type="number" value="' + (a.base_price ?? "") + '"></div>' +
-        '</div>' +
-        '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
-        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
-          '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ea_' + a.id + '" ' + (a.is_active ? "checked" : "") + ' style="width:auto"> Active</label>' +
-          '<button class="btn sm" onclick="saveArticle(' + jq(a.id) + ')">Save changes</button>' +
-          '<button class="btn sm ghost" onclick="toggleEdit(' + jq(a.id) + ')">Cancel</button>' +
-        '</div>' +
-      '</div>' +
-      // ── variants + photos ──
-      '<div class="grid2"><div>' +
-        '<div style="margin-bottom:8px">' + vs + '</div>' +
-        '<div class="row-actions" style="align-items:end">' +
-          '<div style="width:100px"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
-          '<div style="width:80px"><label>Size</label><input id="vs_' + a.id + '"></div>' +
-          '<div style="width:88px"><label>Price</label><input id="vp_' + a.id + '" type="number"></div>' +
-          '<div style="width:75px"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="0"></div>' +
-          '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">Add</button>' +
-        '</div></div>' +
-      '<div>' +
-        '<label>Photos</label>' +
-        '<div class="thumbs">' + photos + '</div>' +
-        '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">' +
-          '<div style="width:130px"><label>Photo colour</label>' +
-            '<select id="pc_' + a.id + '"><option value="">— any —</option>' + colorOpts + '</select>' +
-          '</div>' +
-          '<div><label>Choose photos</label><input type="file" accept="image/*" multiple onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
-        '</div>' +
-        '<p class="muted" style="font-size:12px;margin-top:6px">Tag each photo with its colour so customers see the right image when they switch colour.</p>' +
-      '</div></div></div>';
-  }).join("");
-}
-
-function toggleEdit(id) {
-  const el = document.getElementById("ef-" + id);
-  el.style.display = el.style.display === "none" ? "block" : "none";
-}
+// renderArticles kept as no-op (list is now in stock; edit via modal)
+function renderArticles() {}
 
 async function saveArticle(id) {
   const body = {
     id,
-    article_code: val("ec_" + id),
-    name:         val("en_" + id),
-    category:     val("ect_" + id),
-    base_price:   val("ebp_" + id) ? Number(val("ebp_" + id)) : null,
-    description:  (document.getElementById("edd_" + id) || {}).value?.trim() || "",
-    is_active:    !!(document.getElementById("ea_" + id) || {}).checked,
+    article_code:   val("ec_" + id),
+    name:           val("en_" + id),
+    category:       val("ect_" + id),
+    base_price:     val("ebp_" + id) ? Number(val("ebp_" + id)) : null,
+    description:    (document.getElementById("edd_" + id) || {}).value?.trim() || "",
+    is_active:      !!(document.getElementById("ea_" + id) || {}).checked,
+    is_new_arrival: !!(document.getElementById("ena_" + id) || {}).checked,
   };
   if (!body.article_code || !body.category) return toast("Code and category are required");
   const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (ok) { toast("Article updated"); toggleEdit(id); loadArticles(); }
+  if (ok) { toast("Article updated"); loadArticles(); }
   else toast("Save failed");
 }
 
-function toggleAdd() { const f = document.getElementById("addForm"); f.style.display = f.style.display === "none" ? "block" : "none"; }
-
-async function createArticle() {
-  const body = { article_code: na_code.value.trim(), name: na_name.value.trim(), category: na_cat.value.trim(),
-    description: na_desc.value.trim() };
-  if (!body.article_code || !body.category) return toast("Code and category are required");
-  const { ok } = await api("/api/admin/articles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (ok) { toast("Article added"); na_code.value = na_name.value = na_cat.value = na_desc.value = ""; toggleAdd(); loadArticles(); }
-  else toast("Failed");
+// ---- add-product wizard ----
+function showWizard() {
+  WIZARD_AID = null;
+  document.getElementById("wzStart").style.display = "none";
+  document.getElementById("wzContainer").style.display = "block";
+  renderWizardStep1();
 }
-async function delArticle(id) {
+function hideWizard() {
+  WIZARD_AID = null;
+  document.getElementById("wzStart").style.display = "block";
+  document.getElementById("wzContainer").style.display = "none";
+  document.getElementById("wzContainer").innerHTML = "";
+}
+function renderWizardStep1() {
+  const cur = SETTINGS.currency || "Rs.";
+  document.getElementById("wzContainer").innerHTML =
+    '<div class="card artcard">' +
+      '<div class="wz-header">' +
+        '<div class="wz-steps"><span class="wz-step on">1</span><span class="wz-step">2</span><span class="wz-step">3</span></div>' +
+        '<h4 style="margin:0;flex:1">Basic Info</h4>' +
+        '<button class="btn sm ghost" onclick="hideWizard()">Cancel</button>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="field"><label>Article Code *</label><input id="wz1_code" placeholder="BAG-1023" autocomplete="off"></div>' +
+        '<div class="field"><label>Name</label><input id="wz1_name" placeholder="Ladies Handbag"></div>' +
+        '<div class="field"><label>Category *</label><input id="wz1_cat" placeholder="Handbag" list="catList"></div>' +
+        '<div class="field"><label>Base Price (' + esc(cur) + ')</label><input id="wz1_price" type="number" placeholder="500"></div>' +
+      '</div>' +
+      '<div class="field"><label>Description</label><textarea id="wz1_desc" rows="2" style="resize:vertical;width:100%;padding:8px;border:1px solid var(--line);font-family:inherit;font-size:14px;border-radius:2px"></textarea></div>' +
+      '<div class="row-actions" style="justify-content:flex-end">' +
+        '<button class="btn" onclick="wzStep1Submit()">Create &amp; Continue →</button>' +
+      '</div>' +
+    '</div>';
+  const el = document.getElementById("wz1_code"); if (el) el.focus();
+}
+async function wzStep1Submit() {
+  const code = val("wz1_code"), name = val("wz1_name"), cat = val("wz1_cat");
+  const desc = (document.getElementById("wz1_desc") || {}).value?.trim() || "";
+  const price = val("wz1_price");
+  if (!code) return toast("Article code is required");
+  if (!cat) return toast("Category is required");
+  const duplicate = ARTICLES.find(a => (a.article_code || "").trim().toLowerCase() === code.toLowerCase());
+  if (duplicate) {
+    toast("❌ Article code \"" + code + "\" is already used by \"" + (duplicate.name || duplicate.article_code) + "\"");
+    const el = document.getElementById("wz1_code");
+    if (el) { el.style.border = "1.5px solid var(--danger,#dc3545)"; el.focus(); setTimeout(() => el.style.border = "", 2500); }
+    return;
+  }
+  const { ok, data } = await api("/api/admin/articles", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article_code: code, name, category: cat, description: desc, base_price: price ? Number(price) : null }) });
+  if (!ok) return toast("Failed to create article");
+  WIZARD_AID = data.id;
+  toast("Article created — now add colours & stock");
+  await loadArticles();
+  renderWizardStep2();
+}
+function renderWizardStep2() {
+  const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
+  const knownColors = [...new Set((a.variants || []).map(v => v.color).filter(Boolean))];
+  const colorOpts = knownColors.map(c => '<option>' + esc(c) + '</option>').join('');
+  document.getElementById("wzContainer").innerHTML =
+    '<div class="card artcard">' +
+      '<div class="wz-header">' +
+        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step on">2</span><span class="wz-step">3</span></div>' +
+        '<h4 style="margin:0;flex:1">Colours &amp; Stock — <strong>' + esc(a.article_code || "") + '</strong></h4>' +
+        '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;cursor:pointer;font-weight:normal">' +
+          '<input type="checkbox" id="wz2_na" ' + (a.is_new_arrival ? "checked" : "") + ' onchange="wzToggleNewArrival()" style="width:auto"> ⚡ New Arrival' +
+        '</label>' +
+      '</div>' +
+      '<div id="wzVariantList" style="margin-bottom:16px"></div>' +
+      '<div class="row-actions" style="align-items:flex-end;flex-wrap:wrap;gap:8px">' +
+        '<div style="min-width:110px"><label>Colour</label><input id="wz2_vc" list="wzColors" autocomplete="off"><datalist id="wzColors">' + colorOpts + '</datalist></div>' +
+        '<div style="min-width:78px"><label>Size</label><input id="wz2_vs"></div>' +
+        '<div style="min-width:86px"><label>Price</label><input id="wz2_vp" type="number"></div>' +
+        '<div style="min-width:68px"><label>Qty</label><input id="wz2_vq" type="number" value="0"></div>' +
+        '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;padding-bottom:2px;cursor:pointer;font-size:13px;font-weight:normal;white-space:nowrap">' +
+          '<input type="checkbox" id="wz2_va" checked style="width:auto"> Live' +
+        '</label>' +
+        '<button class="btn sm" onclick="wzAddVariant()" style="align-self:flex-end">+ Add</button>' +
+      '</div>' +
+      '<div class="row-actions" style="justify-content:flex-end;margin-top:16px;gap:8px">' +
+        '<button class="btn ghost sm" onclick="wzStep3()">Skip to Photos</button>' +
+        '<button class="btn" onclick="wzStep3()">Next: Photos →</button>' +
+      '</div>' +
+    '</div>';
+  renderWizardVariantList();
+}
+function renderWizardVariantList() {
+  const el = document.getElementById("wzVariantList"); if (!el) return;
+  const a = ARTICLES.find(x => x.id === WIZARD_AID);
+  const vs = (a && a.variants) || [];
+  const cur = SETTINGS.currency || "Rs.";
+  if (!vs.length) { el.innerHTML = '<p class="muted" style="font-size:13px">No colours/sizes added yet.</p>'; return; }
+  el.innerHTML = vs.map(v =>
+    '<div class="line">' +
+      '<span style="flex:1;font-size:13px">' +
+        esc(v.color || "—") + (v.size ? ' · ' + esc(v.size) : '') +
+        ' · ' + esc(cur) + (v.price != null ? v.price : (a.base_price ?? '?')) +
+        ' · Qty: ' + v.available_qty +
+        (v.is_active ? ' <span style="color:var(--success);font-size:11px;font-weight:700">LIVE</span>' : ' <span style="color:var(--muted);font-size:11px">off</span>') +
+      '</span>' +
+      '<button class="btn sm ghost" style="padding:4px 8px;flex-shrink:0" onclick="wzDelVariant(' + jq(v.id) + ')">✕</button>' +
+    '</div>'
+  ).join("");
+}
+async function wzAddVariant() {
+  if (!WIZARD_AID) return;
+  const color = val("wz2_vc"), size = val("wz2_vs"), price = val("wz2_vp"), qty = val("wz2_vq") || 0;
+  const isActive = (document.getElementById("wz2_va") || {}).checked ? 1 : 0;
+  if (!color && !size) return toast("Enter a colour or size");
+  const { ok } = await api("/api/admin/variants", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article_id: WIZARD_AID, color, size, price: price ? Number(price) : null, qty: Number(qty), is_active: isActive }) });
+  if (!ok) return toast("Failed");
+  ["wz2_vc","wz2_vs","wz2_vp"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+  const qEl = document.getElementById("wz2_vq"); if (qEl) qEl.value = "0";
+  toast("Variant added");
+  await loadArticles();
+  renderWizardVariantList();
+}
+async function wzDelVariant(vid) {
+  const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(vid), { method: "DELETE" });
+  if (!ok) return toast("Failed");
+  await loadArticles(); renderWizardVariantList();
+}
+async function wzToggleNewArrival() {
+  if (!WIZARD_AID) return;
+  const a = ARTICLES.find(x => x.id === WIZARD_AID); if (!a) return;
+  const checked = (document.getElementById("wz2_na") || {}).checked;
+  await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: WIZARD_AID, article_code: a.article_code, name: a.name, category: a.category,
+      base_price: a.base_price, description: a.description, is_active: a.is_active, is_new_arrival: checked ? 1 : 0 }) });
+}
+function wzStep3() {
+  const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
+  const knownColors = [...new Set((a.variants || []).map(v => v.color).filter(Boolean))];
+  const colorOpts = knownColors.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  document.getElementById("wzContainer").innerHTML =
+    '<div class="card artcard">' +
+      '<div class="wz-header">' +
+        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step done">✓</span><span class="wz-step on">3</span></div>' +
+        '<h4 style="margin:0;flex:1">Photos — <strong>' + esc(a.article_code || "") + '</strong></h4>' +
+        '<span class="muted" style="font-size:13px">Optional</span>' +
+      '</div>' +
+      '<p class="muted" style="margin-bottom:12px;font-size:13px">Tag each photo with its colour so customers see the right image when they switch colour.</p>' +
+      '<div class="thumbs" id="wzPhotoList">' + wzBuildPhotoThumbs(a) + '</div>' +
+      '<div class="row-actions" style="align-items:flex-end;flex-wrap:wrap;gap:8px;margin-top:12px">' +
+        '<div style="min-width:140px"><label>Photo colour</label><select id="wz3_pc"><option value="">— any colour —</option>' + colorOpts + '</select></div>' +
+        '<div><label>Choose photos</label><input type="file" accept="image/*" multiple onchange="wzUploadPhoto(this)"></div>' +
+      '</div>' +
+      '<div class="row-actions" style="justify-content:flex-end;margin-top:20px">' +
+        '<button class="btn" onclick="wzFinish()">✓ Done — View in Stock</button>' +
+      '</div>' +
+    '</div>';
+}
+function wzBuildPhotoThumbs(a) {
+  return (a.photos || []).map(p =>
+    '<div class="t"><img src="' + esc(p.url) + '">' +
+      (p.color ? '<div style="font-size:10px;text-align:center;color:var(--muted)">' + esc(p.color) + '</div>' : '') +
+      '<span class="rm" onclick="wzDelPhoto(' + jq(p.id) + ')">✕</span>' +
+    '</div>'
+  ).join('');
+}
+async function wzUploadPhoto(input) {
+  if (!WIZARD_AID || !input.files.length) return;
+  const color = (document.getElementById("wz3_pc") || {}).value || "";
+  const files = [...input.files];
+  toast("Uploading " + files.length + " photo(s)…");
+  for (const file of files) {
+    const small = await compressImage(file);
+    const fd = new FormData(); fd.append("file", small); fd.append("article_id", WIZARD_AID);
+    if (color) fd.append("color", color);
+    const res = await fetch("/api/admin/photos", { method: "POST", body: fd });
+    if (!res.ok) { toast("Upload failed"); return; }
+  }
+  toast(files.length + " photo(s) added");
+  await loadArticles();
+  const el = document.getElementById("wzPhotoList");
+  if (el) el.innerHTML = wzBuildPhotoThumbs(ARTICLES.find(x => x.id === WIZARD_AID) || {});
+}
+async function wzDelPhoto(id) {
+  const { ok } = await api("/api/admin/photos?id=" + encodeURIComponent(id), { method: "DELETE" });
+  if (!ok) return toast("Failed");
+  await loadArticles();
+  const el = document.getElementById("wzPhotoList");
+  if (el) el.innerHTML = wzBuildPhotoThumbs(ARTICLES.find(x => x.id === WIZARD_AID) || {});
+}
+function wzFinish() {
+  WIZARD_AID = null;
+  hideWizard();
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.p === "stock"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("on", p.id === "p-stock"));
+  toast("Product added! You can edit it in Stock.");
+}
+
+// ---- edit modal ----
+function openEditModal(aid) {
+  EDIT_MODAL_AID = aid;
+  document.getElementById("editModal").style.display = "block";
+  document.body.style.overflow = "hidden";
+  refreshEditModal();
+}
+function closeEditModal() {
+  EDIT_MODAL_AID = null;
+  document.getElementById("editModal").style.display = "none";
+  document.body.style.overflow = "";
+}
+function refreshEditModal() {
+  const a = ARTICLES.find(x => x.id === EDIT_MODAL_AID); if (!a) return;
+  document.getElementById("editModalTitle").textContent = "Edit — " + a.article_code + (a.name ? " · " + a.name : "");
+  document.getElementById("editModalBody").innerHTML = buildEditModalHTML(a);
+}
+function buildEditModalHTML(a) {
+  const cur = SETTINGS.currency || "Rs.";
+  const knownColors = [...new Set(a.variants.map(v => v.color).filter(Boolean))];
+  const colorOpts = knownColors.map(c => '<option>' + esc(c) + '</option>').join('');
+  const vs = a.variants.map(v =>
+    '<div class="line">' +
+      '<div style="flex:1;min-width:80px;font-size:13px">' + esc(v.color || '—') + ' · ' + esc(v.size || '—') + '</div>' +
+      '<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '" placeholder="Qty" style="width:62px;padding:5px 6px">' +
+      '<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="Price" style="width:76px;padding:5px 6px">' +
+      '<button class="btn sm ghost" style="padding:5px 8px;flex-shrink:0" onclick="saveVariant(' + jq(v.id) + ')">✓</button>' +
+      '<span class="x" style="flex-shrink:0;margin-left:0" onclick="delVariant(' + jq(v.id) + ')">✕</span>' +
+    '</div>'
+  ).join('') || '<p class="muted" style="font-size:13px">No colours/sizes yet.</p>';
+  const photos = (a.photos || []).map(p =>
+    '<div class="t"><img src="' + esc(p.url) + '">' +
+      (p.color ? '<div style="font-size:10px;text-align:center;color:var(--muted)">' + esc(p.color) + '</div>' : '') +
+      '<span class="rm" onclick="delPhoto(' + jq(p.id) + ')">✕</span>' +
+    '</div>'
+  ).join('');
+  return (
+    '<div style="margin-bottom:20px">' +
+      '<h4 style="margin-bottom:12px">Article Info</h4>' +
+      '<div class="grid2">' +
+        '<div class="field"><label>Article Code</label><input id="ec_' + a.id + '" value="' + esc(a.article_code) + '"></div>' +
+        '<div class="field"><label>Name</label><input id="en_' + a.id + '" value="' + esc(a.name || "") + '"></div>' +
+        '<div class="field"><label>Category</label><input id="ect_' + a.id + '" value="' + esc(a.category || "") + '" list="catList"></div>' +
+        '<div class="field"><label>Base Price (' + esc(cur) + ')</label><input id="ebp_' + a.id + '" type="number" value="' + (a.base_price ?? "") + '"></div>' +
+      '</div>' +
+      '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+        '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ea_' + a.id + '" ' + (a.is_active ? "checked" : "") + ' style="width:auto"> Active</label>' +
+        '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ena_' + a.id + '" ' + (a.is_new_arrival ? "checked" : "") + ' style="width:auto"> ⚡ New Arrival</label>' +
+        '<button class="btn sm" onclick="saveArticle(' + jq(a.id) + ')">Save info</button>' +
+        '<button class="btn danger sm" onclick="modalDelArticle(' + jq(a.id) + ')">Delete article</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="border-top:1px solid var(--line);padding-top:16px;margin-bottom:20px">' +
+      '<h4 style="margin-bottom:10px">Colours / Sizes</h4>' +
+      '<div style="margin-bottom:10px">' + vs + '</div>' +
+      '<div class="row-actions" style="align-items:flex-end;flex-wrap:wrap;gap:8px">' +
+        '<div style="min-width:110px"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
+        '<div style="min-width:78px"><label>Size</label><input id="vs_' + a.id + '"></div>' +
+        '<div style="min-width:86px"><label>Price</label><input id="vp_' + a.id + '" type="number"></div>' +
+        '<div style="min-width:68px"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="0"></div>' +
+        '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">Add</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="border-top:1px solid var(--line);padding-top:16px">' +
+      '<h4 style="margin-bottom:10px">Photos</h4>' +
+      '<div class="thumbs">' + photos + '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">' +
+        '<div style="min-width:130px"><label>Photo colour</label>' +
+          '<select id="pc_' + a.id + '"><option value="">— any —</option>' + colorOpts + '</select>' +
+        '</div>' +
+        '<div><label>Choose photos</label><input type="file" accept="image/*" multiple onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
+      '</div>' +
+      '<p class="muted" style="font-size:12px;margin-top:6px">Tag each photo with its colour.</p>' +
+    '</div>'
+  );
+}
+async function modalDelArticle(id) {
   if (!confirm("Delete this article and all its colours/photos?")) return;
   const { ok } = await api("/api/admin/articles?id=" + encodeURIComponent(id), { method: "DELETE" });
-  if (ok) { toast("Deleted"); loadArticles(); }
+  if (ok) { toast("Deleted"); closeEditModal(); loadArticles(); }
 }
 async function addVariant(aid) {
   const body = { article_id: aid, color: val("vc_" + aid), size: val("vs_" + aid),
@@ -336,6 +574,9 @@ async function uploadBanner() {
   const fileInput = document.getElementById("bnr_file");
   const link = document.getElementById("bnr_link").value.trim();
   if (!fileInput.files.length) return toast("Choose a photo first");
+  const bannerRes = await api("/api/admin/banners");
+  const currentCount = (bannerRes.data?.banners || []).length;
+  if (currentCount >= 5) return toast("Maximum 5 banners allowed. Delete one first.");
   const file = await compressImage(fileInput.files[0], 1600, 0.85);
   toast("Uploading…");
   const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
@@ -416,11 +657,150 @@ async function deleteCatImg(category) {
   if (ok) { delete CAT_IMAGES[category]; toast("Removed"); renderCatImgList(); }
 }
 
+// ---- categories ----
+async function loadCategories() {
+  const { data } = await api("/api/admin/categories");
+  if (!data || data.error) return;
+  CATEGORIES = data.categories || [];
+  renderCatManager();
+}
+
+function showAddCatForm() {
+  const f = document.getElementById("addCatForm");
+  if (f) f.style.display = "block";
+}
+function hideAddCatForm() {
+  const f = document.getElementById("addCatForm");
+  if (f) f.style.display = "none";
+  const inp = document.getElementById("new_cat_name");
+  if (inp) inp.value = "";
+}
+
+async function createCategory() {
+  const name = (document.getElementById("new_cat_name")?.value || "").trim();
+  if (!name) return toast("Enter a category name");
+  const { ok } = await api("/api/admin/categories", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name })
+  });
+  if (ok) { toast("Category created"); hideAddCatForm(); loadCategories(); loadArticles(); }
+  else toast("Failed");
+}
+
+function renderCatManager() {
+  const el = document.getElementById("catManagerList");
+  if (!el) return;
+  if (!CATEGORIES.length) { el.innerHTML = '<p class="muted">No categories yet.</p>'; return; }
+  // Use numeric index for IDs to avoid issues with spaces/special chars in category names
+  el.innerHTML = CATEGORIES.map((c, i) =>
+    '<div class="card artcard" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+      '<div id="ci-label-' + i + '" style="flex:1;min-width:120px">' +
+        '<strong>' + esc(c.name) + '</strong>' +
+        ' <span class="muted" style="font-size:12px">' + c.article_count + ' article' + (c.article_count !== 1 ? 's' : '') + '</span>' +
+      '</div>' +
+      '<div id="ci-edit-' + i + '" style="display:none;flex:1;min-width:160px">' +
+        '<input id="ci-inp-' + i + '" value="' + esc(c.name) + '" style="width:100%">' +
+      '</div>' +
+      '<div class="row-actions">' +
+        '<button class="btn sm ghost" id="ci-btn-' + i + '" onclick="startRenameCategory(' + i + ')">Rename</button>' +
+        '<button class="btn sm" id="ci-save-' + i + '" onclick="confirmRenameCategory(' + i + ',' + jq(c.name) + ')" style="display:none">Save</button>' +
+        '<button class="btn sm ghost" id="ci-cancel-' + i + '" onclick="cancelRenameCategory(' + i + ')" style="display:none">Cancel</button>' +
+        '<button class="btn danger sm" onclick="deleteCategory(' + jq(c.name) + ')">Delete</button>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function startRenameCategory(i) {
+  document.getElementById('ci-label-' + i).style.display = 'none';
+  document.getElementById('ci-edit-' + i).style.display = 'block';
+  document.getElementById('ci-btn-' + i).style.display = 'none';
+  document.getElementById('ci-save-' + i).style.display = '';
+  document.getElementById('ci-cancel-' + i).style.display = '';
+  const inp = document.getElementById('ci-inp-' + i);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function cancelRenameCategory(i) {
+  document.getElementById('ci-label-' + i).style.display = '';
+  document.getElementById('ci-edit-' + i).style.display = 'none';
+  document.getElementById('ci-btn-' + i).style.display = '';
+  document.getElementById('ci-save-' + i).style.display = 'none';
+  document.getElementById('ci-cancel-' + i).style.display = 'none';
+}
+
+async function confirmRenameCategory(i, old_name) {
+  const new_name = (document.getElementById('ci-inp-' + i) || {}).value || '';
+  const trimmed = new_name.trim();
+  if (!trimmed || trimmed === old_name) return cancelRenameCategory(i);
+  const { ok } = await api('/api/admin/categories', {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ old_name, new_name: trimmed })
+  });
+  if (ok) { toast('Renamed'); loadCategories(); loadArticles(); } else toast('Failed');
+}
+
+async function deleteCategory(name) {
+  if (!confirm('Delete category "' + name + '"? Articles will move to Uncategorized.')) return;
+  const { ok } = await api('/api/admin/categories', {
+    method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name })
+  });
+  if (ok) { toast('Deleted'); loadCategories(); loadArticles(); } else toast('Failed');
+}
+
+// Sign in flow:
+// /api/admin/login-bounce is protected by CF Access, so navigating to it triggers the
+// CF Access login page. After the user authenticates, CF Access redirects back to
+// login-bounce, which immediately 302s to /admin.html with the session cookie set.
+function doSignIn() {
+  window.location.href = '/api/admin/login-bounce';
+}
+
 // ---- utils ----
 function authFail(data) {
-  if (data && data.error === "auth") {
-    document.querySelector(".wrap").innerHTML = '<div class="notice card"><h2>Not signed in</h2><p class="muted">Sign in through Cloudflare Access to manage the shop. (During local testing set DEV="1".)</p></div>';
+  if (!data || data.error !== "auth") return;
+  if (AUTH_FAIL_FIRED) return; // already handling it, don't race
+  AUTH_FAIL_FIRED = true;
+
+  const reason  = data.reason || "";
+  const email   = data.email  || "";
+  // ?_cf=1 means we already did one auto-redirect; don't loop, show the screen.
+  const retried = new URLSearchParams(location.search).has("_cf");
+
+  // For cf_redirect (CORS failure), do one reload to let CF Access intercept admin.html.
+  // For everything else (timeout, no_session, expired) show the sign-in screen immediately.
+  if (!retried && reason === "cf_redirect") {
+    window.location.replace("/admin.html?_cf=1");
+    return;
   }
+
+  // Second pass (or wrong-account) — show the appropriate screen.
+  let title, body, btnLabel;
+
+  if (reason === "email_not_allowed") {
+    title    = "Wrong account";
+    body     = "You are signed in as <strong>" + email + "</strong>, but that email is not in the allowed list."
+             + "<br><br>Click below to sign out and sign in with the correct account."
+             + " If the correct email isn't added yet, update <code>ALLOWED_EMAILS</code> in Cloudflare Pages → Settings → Environment Variables.";
+    btnLabel = "Sign out &amp; sign in again";
+  } else if (reason === "expired") {
+    title    = "Session expired";
+    body     = (email ? "Your session for <strong>" + email + "</strong> has timed out." : "Your admin session has timed out.")
+             + "<br><br>Click below to sign in again.";
+    btnLabel = "Sign In";
+  } else {
+    title    = "Not signed in";
+    body     = "No active admin session found. Click below to sign in through Cloudflare Access.";
+    btnLabel = "Sign In";
+  }
+
+  document.body.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'min-height:100vh;font-family:inherit;padding:40px;background:#f8f9fa">' +
+    '<div style="background:#fff;border:1px solid #dee2e6;border-radius:4px;padding:48px 40px;max-width:420px;width:100%">' +
+    '<h2 style="margin-bottom:12px;font-size:20px">' + title + '</h2>' +
+    '<p style="color:#555;margin-bottom:28px;font-size:14px;line-height:1.6;text-align:left">' + body + '</p>' +
+    '<button onclick="doSignIn()" style="background:#00a1e0;color:#fff;padding:12px 32px;' +
+    'border:none;border-radius:2px;font-weight:700;font-size:14px;letter-spacing:.02em;cursor:pointer">' + btnLabel + '</button>' +
+    '</div></div>';
 }
 function val(id) { const e = document.getElementById(id); return e ? e.value.trim() : ""; }
 function jq(s) { return "'" + String(s).replace(/'/g, "\\'") + "'"; }

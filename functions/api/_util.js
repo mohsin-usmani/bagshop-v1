@@ -23,37 +23,41 @@ export function newToken() {
   return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// Admin gate. Cloudflare Access sits in front of /admin.html and injects
-// Cf-Access-Authenticated-User-Email on that path. For API fetch calls from
-// the same session we fall back to the CF_Authorization cookie Access set at login.
-export function isAdmin(context) {
+// Admin gate. Returns {ok, reason, email} so callers can surface useful errors.
+export function checkAdmin(context) {
   const { request, env } = context;
-  if (env.DEV === "1") return true;
+  if (env.DEV === "1") return { ok: true };
 
   const allow = (env.ALLOWED_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
-  // Prefer the header (present when Access also covers the API path)
+  // Prefer the header injected by CF Access when it protects the API path
   const headerEmail = request.headers.get("Cf-Access-Authenticated-User-Email");
   if (headerEmail) {
-    if (allow.length && !allow.includes(headerEmail)) return false;
-    return true;
+    if (allow.length && !allow.includes(headerEmail))
+      return { ok: false, reason: "email_not_allowed", email: headerEmail };
+    return { ok: true, email: headerEmail };
   }
 
-  // Fall back to the CF_Authorization JWT cookie set by Access at login
+  // Fall back to CF_Authorization JWT cookie set by Access at login
   const cookie = request.headers.get("cookie") || "";
   const m = cookie.match(/CF_Authorization=([^;]+)/);
-  if (!m) return false;
+  if (!m) return { ok: false, reason: "no_session" };
   try {
     const parts = m[1].split(".");
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return { ok: false, reason: "bad_token" };
     const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    if (!payload.email) return false;
-    if (payload.exp && Date.now() / 1000 > payload.exp) return false;
-    if (allow.length && !allow.includes(payload.email)) return false;
-    return true;
+    if (!payload.email) return { ok: false, reason: "bad_token" };
+    if (allow.length && !allow.includes(payload.email))
+      return { ok: false, reason: "email_not_allowed", email: payload.email };
+    return { ok: true, email: payload.email };
   } catch {
-    return false;
+    return { ok: false, reason: "bad_token" };
   }
+}
+
+// Backwards-compat alias — returns boolean
+export function isAdmin(context) {
+  return checkAdmin(context).ok;
 }
 
 export async function getSettings(env) {

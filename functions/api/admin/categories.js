@@ -1,7 +1,8 @@
 import { json, isAdmin } from '../_util.js';
 
-export async function onRequestGet({ env, request }) {
-  if (!isAdmin(env, request)) return json({ error: 'auth' }, 403);
+export async function onRequestGet(context) {
+  const { env } = context;
+  if (!isAdmin(context)) return json({ error: 'auth' }, 403);
   const { results } = await env.DB.prepare(
     "SELECT category as name, COUNT(*) as article_count FROM articles WHERE category IS NOT NULL AND category != '' GROUP BY category ORDER BY category"
   ).all();
@@ -17,8 +18,9 @@ export async function onRequestGet({ env, request }) {
   return json({ categories });
 }
 
-export async function onRequestPost({ env, request }) {
-  if (!isAdmin(env, request)) return json({ error: 'auth' }, 403);
+export async function onRequestPost(context) {
+  const { env, request } = context;
+  if (!isAdmin(context)) return json({ error: 'auth' }, 403);
   const { name } = await request.json();
   if (!name || !name.trim()) return json({ error: 'Name required' }, 400);
   const trimmed = name.trim();
@@ -29,8 +31,9 @@ export async function onRequestPost({ env, request }) {
   return json({ ok: true });
 }
 
-export async function onRequestPatch({ env, request }) {
-  if (!isAdmin(env, request)) return json({ error: 'auth' }, 403);
+export async function onRequestPatch(context) {
+  const { env, request } = context;
+  if (!isAdmin(context)) return json({ error: 'auth' }, 403);
   const { old_name, new_name } = await request.json();
   if (!old_name || !new_name || !new_name.trim()) return json({ error: 'old_name and new_name required' }, 400);
   const trimmed = new_name.trim();
@@ -43,8 +46,9 @@ export async function onRequestPatch({ env, request }) {
   return json({ ok: true });
 }
 
-export async function onRequestDelete({ env, request }) {
-  if (!isAdmin(env, request)) return json({ error: 'auth' }, 403);
+export async function onRequestDelete(context) {
+  const { env, request } = context;
+  if (!isAdmin(context)) return json({ error: 'auth' }, 403);
   const { name } = await request.json();
   if (!name) return json({ error: 'name required' }, 400);
   await env.DB.prepare("UPDATE articles SET category='Uncategorized' WHERE category=?").bind(name).run();

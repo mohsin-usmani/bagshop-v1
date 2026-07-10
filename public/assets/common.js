@@ -5,9 +5,30 @@ function qs(name) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 20000); // 20 s hard timeout
+  let res;
+  try {
+    res = await fetch(path, { signal: ctrl.signal, ...opts });
+    clearTimeout(tid);
+  } catch (err) {
+    clearTimeout(tid);
+    if (err && err.name === "AbortError") {
+      // Timed out — surface as a generic null-data response so callers show error state
+      return { ok: false, status: 0, data: null };
+    }
+    // CF Access redirected the fetch to cloudflareaccess.com (cross-origin CORS failure)
+    const d = { error: "auth", reason: "cf_redirect" };
+    window.dispatchEvent(new CustomEvent("apiauthfail", { detail: d }));
+    return { ok: false, status: 0, data: d };
+  }
   let data = null;
   try { data = await res.json(); } catch (e) {}
+  // CF Access can also return an HTML login page (same-origin 200) instead of JSON
+  if (!data && (res.headers.get("content-type") || "").includes("text/html")) {
+    data = { error: "auth", reason: "cf_redirect" };
+    window.dispatchEvent(new CustomEvent("apiauthfail", { detail: data }));
+  }
   return { ok: res.ok, status: res.status, data };
 }
 

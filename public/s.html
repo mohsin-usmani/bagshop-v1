@@ -19,7 +19,15 @@
     </div>
     <div class="nav-center">
       <a class="nav-logo-link" href="#" onclick="goHome();return false">
-        <svg class="nav-logo-svg" width="28" height="28" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="20" fill="#1B1B1B" stroke="white" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>
+        <svg class="nav-logo-svg" viewBox="0 0 232 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
+          <path d="M0,0H44V13H13V24H38V37H13V60H0Z" fill="currentColor"/>
+          <rect x="49" y="0" width="13" height="12" fill="currentColor"/>
+          <rect x="49" y="18" width="13" height="42" fill="currentColor"/>
+          <path d="M67,60V0H110V60H97V13H80V60Z" fill="currentColor"/>
+          <path d="M115,0H159V13H128V24H153V37H128V47H159V60H115Z" fill="currentColor"/>
+          <polygon points="164,6 170,0 182,0 232,54 226,60 214,60" fill="currentColor"/>
+          <polygon points="214,0 226,0 232,6 182,60 170,60 164,54" fill="currentColor"/>
+        </svg>
         <span class="nav-shopname" id="navShopName"></span>
       </a>
     </div>
@@ -45,9 +53,6 @@
   </div>
 </nav>
 
-<!-- Desktop dropdown -->
-<div class="desktop-dropdown" id="desktopDropdown" style="display:none"
-     onmouseenter="clearTimeout(window._ddTimer)" onmouseleave="scheduleCloseDD()"></div>
 
 <!-- ── MOBILE MENU ── -->
 <div class="mob-overlay" id="mobOverlay" onclick="closeMenu()"></div>
@@ -55,7 +60,15 @@
   <!-- Main panel -->
   <div class="mob-panel" id="mobPanelMain">
     <div class="mob-menu-top">
-      <svg width="26" height="26" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="20" fill="#1B1B1B" stroke="white" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>
+      <svg class="nav-logo-svg" style="height:24px" viewBox="0 0 232 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
+        <path d="M0,0H44V13H13V24H38V37H13V60H0Z" fill="currentColor"/>
+        <rect x="49" y="0" width="13" height="12" fill="currentColor"/>
+        <rect x="49" y="18" width="13" height="42" fill="currentColor"/>
+        <path d="M67,60V0H110V60H97V13H80V60Z" fill="currentColor"/>
+        <path d="M115,0H159V13H128V24H153V37H128V47H159V60H115Z" fill="currentColor"/>
+        <polygon points="164,6 170,0 182,0 232,54 226,60 214,60" fill="currentColor"/>
+        <polygon points="214,0 226,0 232,6 182,60 170,60 164,54" fill="currentColor"/>
+      </svg>
       <span id="mobShopName" style="font-weight:700;font-size:15px"></span>
       <button class="mob-close-btn" onclick="closeMenu()">✕</button>
     </div>

@@ -12,7 +12,15 @@
 <div class="admin-topbar">
   <div class="wrap">
     <div class="admin-brand">
-      <svg width="30" height="30" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="20" fill="#1B1B1B" stroke="rgba(255,255,255,0.85)" stroke-width="2"/><text x="22" y="27.5" text-anchor="middle" fill="white" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="900" letter-spacing="-0.5">FinEx</text></svg>
+      <svg class="nav-logo-svg" style="color:#fff" viewBox="0 0 232 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
+        <path d="M0,0H44V13H13V24H38V37H13V60H0Z" fill="currentColor"/>
+        <rect x="49" y="0" width="13" height="12" fill="currentColor"/>
+        <rect x="49" y="18" width="13" height="42" fill="currentColor"/>
+        <path d="M67,60V0H110V60H97V13H80V60Z" fill="currentColor"/>
+        <path d="M115,0H159V13H128V24H153V37H128V47H159V60H115Z" fill="currentColor"/>
+        <polygon points="164,6 170,0 182,0 232,54 226,60 214,60" fill="currentColor"/>
+        <polygon points="214,0 226,0 232,6 182,60 170,60 164,54" fill="currentColor"/>
+      </svg>
       <div class="admin-brand-name" id="hdrName">Admin</div>
     </div>
     <a href="#" onclick="loadAll();return false" style="color:rgba(255,255,255,.7);font-size:13px;text-decoration:none">↻ Refresh</a>
@@ -22,7 +30,7 @@
 <div class="wrap" style="padding-top:0">
   <div class="tabs" id="tabs">
     <div class="tab on" data-p="stock">Stock</div>
-    <div class="tab" data-p="articles">Articles</div>
+    <div class="tab" data-p="articles">Add Product</div>
     <div class="tab" data-p="categories">Categories</div>
     <div class="tab" data-p="banners">Banners</div>
     <div class="tab" data-p="links">Customer Links</div>
@@ -32,25 +40,33 @@
 
   <!-- STOCK -->
   <div class="panel on" id="p-stock">
-    <div class="hd"><h3>Update stock</h3><button class="btn" onclick="saveStock()">Save changes</button></div>
-    <p class="muted" style="margin-top:0;margin-bottom:12px">Change any quantity or price, then Save. Customers see it instantly.</p>
-    <div id="stockTable"></div>
+    <div class="hd"><h3>Stock</h3><button class="btn" onclick="saveStock()">Save changes</button></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <div style="position:relative;flex:1">
+        <input id="stockSearch" placeholder="Search by code, name or category…" oninput="renderStock()" autocomplete="off"
+          style="width:100%;padding:9px 36px 9px 12px;border:1px solid var(--line);font-size:14px;border-radius:2px;font-family:inherit">
+        <svg style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      </div>
+      <select id="stockSort" onchange="renderStock()" style="width:130px;padding:9px 10px;border:1px solid var(--line);font-size:13px;border-radius:2px;font-family:inherit;background:var(--bg);color:var(--ink);flex-shrink:0">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="az">A → Z</option>
+        <option value="za">Z → A</option>
+        <option value="category">By category</option>
+      </select>
+    </div>
+    <p class="muted" style="margin-top:0;margin-bottom:12px;font-size:13px">Edit price or qty inline, then Save. Click ✏ Edit to change article details or add colours.</p>
+    <div id="stockTable"><p class="muted" style="font-size:13px">Loading stock…</p></div>
   </div>
 
-  <!-- ARTICLES -->
+  <!-- ADD PRODUCT (3-step wizard) -->
   <div class="panel" id="p-articles">
-    <div class="hd"><h3>Articles</h3><button class="btn" onclick="toggleAdd()">+ Add new article</button></div>
-    <div class="card artcard" id="addForm" style="display:none">
-      <div class="grid2">
-        <div class="field"><label>Article code *</label><input id="na_code" placeholder="BAG-1023"></div>
-        <div class="field"><label>Name</label><input id="na_name" placeholder="Ladies Handbag"></div>
-        <div class="field"><label>Category *</label><input id="na_cat" placeholder="Handbag" list="catList"></div>
-      </div>
-      <div class="field"><label>Description</label><input id="na_desc" placeholder="PU leather, zip closure"></div>
-      <div class="row-actions"><button class="btn" onclick="createArticle()">Create</button><button class="btn ghost" onclick="toggleAdd()">Cancel</button></div>
-    </div>
     <datalist id="catList"></datalist>
-    <div id="artList"></div>
+    <div id="wzStart" style="text-align:center;padding:48px 24px">
+      <button class="btn" style="font-size:16px;padding:16px 40px;letter-spacing:.02em" onclick="showWizard()">+ Add New Product</button>
+      <p class="muted" style="margin-top:14px;font-size:13px">3 steps: basic info → colours &amp; stock → photos.<br>Each step saves live to the database immediately.</p>
+    </div>
+    <div id="wzContainer" style="display:none"></div>
   </div>
 
   <!-- CATEGORIES -->
@@ -148,7 +164,18 @@
   </div>
 </div>
 
-<script src="/assets/common.js"></script>
-<script src="/assets/admin.js"></script>
+<!-- ── EDIT MODAL ── -->
+<div id="editModal" style="display:none;position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.55);overflow-y:auto;padding:20px 12px" onclick="if(event.target===this)closeEditModal()">
+  <div class="edit-modal">
+    <div class="edit-modal-head">
+      <h3 id="editModalTitle" style="margin:0;font-size:16px">Edit Article</h3>
+      <button onclick="closeEditModal()" style="background:none;border:none;cursor:pointer;font-size:22px;line-height:1;color:var(--muted);padding:0 4px">✕</button>
+    </div>
+    <div id="editModalBody" class="edit-modal-body"></div>
+  </div>
+</div>
+
+<script src="/assets/common.js?v=10"></script>
+<script src="/assets/admin.js?v=10"></script>
 </body>
 </html>

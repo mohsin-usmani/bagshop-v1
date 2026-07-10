@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Product — FinEx</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E👜%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+
+<!-- ── NAVBAR ── -->
+<nav class="navbar" id="navbar">
+  <div class="nav-top">
+    <div class="nav-left">
+      <button class="nav-icon-btn" onclick="history.back()" aria-label="Back" title="Back to catalogue">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <div class="nav-center">
+      <a class="nav-logo-link" href="javascript:history.back()">
+        <svg class="nav-logo-svg" viewBox="0 0 232 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
+          <path d="M0,0H44V13H13V24H38V37H13V60H0Z" fill="currentColor"/>
+          <rect x="49" y="0" width="13" height="12" fill="currentColor"/>
+          <rect x="49" y="18" width="13" height="42" fill="currentColor"/>
+          <path d="M67,60V0H110V60H97V13H80V60Z" fill="currentColor"/>
+          <path d="M115,0H159V13H128V24H153V37H128V47H159V60H115Z" fill="currentColor"/>
+          <polygon points="164,6 170,0 182,0 232,54 226,60 214,60" fill="currentColor"/>
+          <polygon points="214,0 226,0 232,6 182,60 170,60 164,54" fill="currentColor"/>
+        </svg>
+        <span class="nav-shopname" id="navShopName"></span>
+      </a>
+    </div>
+    <div class="nav-right">
+      <button class="nav-icon-btn nav-cart-btn" onclick="openCart()" aria-label="Cart">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="nav-cart-badge" id="navCartBadge" style="display:none">0</span>
+      </button>
+    </div>
+  </div>
+  <div class="nav-cats-bar" id="navCatsBar"></div>
+</nav>
+
+<!-- ── BREADCRUMB ── -->
+<div class="pdp-breadcrumb" id="pdpBreadcrumb" style="padding-top:72px"></div>
+
+<!-- ── MAIN CONTENT ── -->
+<div id="pdpApp">
+  <div class="notice muted">Loading product…</div>
+</div>
+
+<!-- ── CART DRAWER ── -->
+<div class="drawer" id="drawer" onclick="if(event.target===this)closeCart()">
+  <div class="sheet">
+    <div class="hd"><h3>Your order</h3><button class="sheet-close" onclick="closeCart()">✕</button></div>
+    <div id="cartLines"></div>
+    <div id="cartTotal" class="cart-total-row"></div>
+    <button class="btn-send-order" onclick="sendOrder()">Send Order on WhatsApp</button>
+    <p class="muted" style="font-size:12px;text-align:center;margin-top:10px">This opens WhatsApp with your order ready to send.</p>
+  </div>
+</div>
+
+<!-- ── CART BAR ── -->
+<div class="cartbar" id="cartbar" style="display:none">
+  <div class="cartbar-inner">
+    <div class="cartbar-left">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span><strong id="cartCount">0</strong> item(s)</span>
+    </div>
+    <button class="btn-cart-view" onclick="openCart()">View &amp; Order →</button>
+  </div>
+</div>
+
+<script src="/assets/common.js"></script>
+<script src="/assets/product.js"></script>
+</body>
+</html>

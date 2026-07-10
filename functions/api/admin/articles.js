@@ -3,9 +3,14 @@ import { json, isAdmin, newId } from "../_util.js";
 export async function onRequestGet(context) {
   const { env } = context;
   if (!isAdmin(context)) return json({ error: "auth" }, 401);
-  const articles = (await env.DB.prepare("SELECT * FROM articles ORDER BY created_at DESC").all()).results || [];
-  const variants = (await env.DB.prepare("SELECT * FROM variants").all()).results || [];
-  const photos = (await env.DB.prepare("SELECT * FROM photos ORDER BY sort_order").all()).results || [];
+  const [artRes, varRes, photoRes] = await Promise.all([
+    env.DB.prepare("SELECT * FROM articles ORDER BY created_at DESC").all(),
+    env.DB.prepare("SELECT * FROM variants").all(),
+    env.DB.prepare("SELECT * FROM photos ORDER BY sort_order").all(),
+  ]);
+  const articles = artRes.results || [];
+  const variants = varRes.results || [];
+  const photos = photoRes.results || [];
   const byA = {};
   articles.forEach((a) => (byA[a.id] = { ...a, variants: [], photos: [] }));
   variants.forEach((v) => byA[v.article_id] && byA[v.article_id].variants.push(v));
@@ -38,8 +43,8 @@ export async function onRequestPatch(context) {
   if (!isAdmin(context)) return json({ error: "auth" }, 401);
   const b = await request.json();
   await env.DB.prepare(
-    "UPDATE articles SET article_code=?, name=?, category=?, description=?, base_price=?, is_active=? WHERE id=?"
-  ).bind(b.article_code, b.name, b.category, b.description, b.base_price ?? null, b.is_active ? 1 : 0, b.id).run();
+    "UPDATE articles SET article_code=?, name=?, category=?, description=?, base_price=?, is_active=?, is_new_arrival=? WHERE id=?"
+  ).bind(b.article_code, b.name, b.category, b.description, b.base_price ?? null, b.is_active ? 1 : 0, b.is_new_arrival ? 1 : 0, b.id).run();
   return json({ ok: true });
 }
 
