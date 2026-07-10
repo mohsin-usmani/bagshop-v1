@@ -170,6 +170,18 @@ function renderApp() {
   renderCart();
 }
 
+// Measure the fixed navbar's real height and pin the sticky toolbar exactly to it
+// (removes the gap that appeared when the toolbar's `top` didn't match the nav height).
+function syncStickyOffsets() {
+  const nav = document.getElementById('navbar');
+  if (!nav) return;
+  const h = nav.offsetHeight;
+  document.documentElement.style.setProperty('--nav-h', h + 'px');
+  const app = document.getElementById('app');
+  if (app) app.style.paddingTop = h + 'px';
+}
+window.addEventListener('resize', syncStickyOffsets);
+
 // ── Navbar ──
 function renderNav() {
   // Header shows the admin-controlled menu list (max 10), falling back to the
@@ -537,13 +549,15 @@ function handleBannerClick(link) {
 }
 
 // ── Category hero ──
+// Always shows a header banner for a category (photo if one is set, otherwise an
+// on-brand coloured band) with the big category name — so opening a category from
+// the top nav looks the same as opening it from a homepage tile.
 function catHeroHTML() {
   if (!CAT_FILTER || !DATA) return '';
   const catImages = DATA.category_images || {};
   const img = catImages[CAT_FILTER];
-  if (!img) return '';
-  return '<div class="cat-hero">' +
-    '<img class="cat-hero-img" src="' + esc(img) + '" alt="' + esc(CAT_FILTER) + '">' +
+  return '<div class="cat-hero' + (img ? '' : ' cat-hero-plain') + '">' +
+    (img ? '<img class="cat-hero-img" src="' + esc(img) + '" alt="' + esc(CAT_FILTER) + '">' : '') +
     '<div class="cat-hero-text">' +
       '<div class="cat-hero-name">' + esc(CAT_FILTER.toUpperCase()) + '</div>' +
     '</div>' +
@@ -558,9 +572,14 @@ function renderCataloguePage() {
   const filterCount = activeFilterCount();
 
   app.innerHTML =
+    '<button class="cat-back" onclick="goHome()">' +
+      '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>' +
+      ' Back to home' +
+    '</button>' +
     catHeroHTML() +
     '<div class="cat-page">' +
-      '<div class="cat-toolbar">' +
+      '<div class="cat-sticky-head">' +
+        '<div class="cat-toolbar">' +
         '<button class="toolbar-btn" onclick="openMobFilters()">' +
           '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>' +
           ' Filters' +
@@ -578,7 +597,8 @@ function renderCataloguePage() {
             ).join('') +
           '</div>' +
         '</div>' +
-      '</div>' +
+      '</div>' + // .cat-toolbar
+      '</div>' + // .cat-sticky-head
       '<div class="grid" id="grid">' +
         (articles.length ? articles.map(articleCard).join('') : '<p class="no-results muted">No items match. Try clearing filters.</p>') +
       '</div>' +

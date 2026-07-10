@@ -102,7 +102,10 @@ function showError(msg) {
 
 // ── Navbar ──
 function renderNav() {
-  const cats = DATA ? DATA.filters.categories || [] : [];
+  // Same admin-controlled header menu (max 10) as the catalogue.
+  const cats = DATA
+    ? ((DATA.nav_categories && DATA.nav_categories.length ? DATA.nav_categories : (DATA.filters.categories || [])).slice(0, 10))
+    : [];
   const bar = document.getElementById('navCatsBar');
   if (bar) {
     bar.innerHTML =
@@ -177,17 +180,23 @@ function pdpHTML() {
       '<button class="pdp-arr next" onclick="nextPhoto()">&#8250;</button>'
     : '';
 
-  // Colour swatches
+  // Colour selector — shows a photo of each colour (Flipkart/Amazon style),
+  // falling back to a colour block only when that colour has no tagged photo.
   let colourSection = '';
   if (colors.length > 0) {
     colourSection =
       '<div class="pdp-col-label">Colour: <strong>' + esc(SEL.color) + '</strong></div>' +
       '<div class="pdp-swatches">' +
-        colors.map(c =>
-          '<button class="pdp-swatch-btn' + (c === SEL.color ? ' on' : '') + '"' +
-          ' style="background:' + (COLOR_CSS[c] || '#ccc') + '"' +
-          ' onclick="selectColor(\'' + jq(c) + '\')" title="' + esc(c) + '"></button>'
-        ).join('') +
+        colors.map(c => {
+          const cphoto = (a.photos || []).find(p => p.color === c);
+          const inner = cphoto
+            ? '<img src="' + esc(cphoto.url) + '" alt="' + esc(c) + '" loading="lazy">'
+            : '<span class="pdp-swatch-color" style="background:' + (COLOR_CSS[c] || '#ccc') + '"></span>';
+          return '<button class="pdp-swatch-btn' + (c === SEL.color ? ' on' : '') + '"' +
+            ' onclick="selectColor(\'' + jq(c) + '\')" title="' + esc(c) + '">' + inner +
+            '<span class="pdp-swatch-name">' + esc(c) + '</span>' +
+          '</button>';
+        }).join('') +
       '</div>';
   }
 

@@ -935,7 +935,7 @@ async function uploadCatImg(category, input) {
   if (!input.files.length) return;
   const file = input.files[0];
   input.value = "";
-  openCropper(file, { ratio: 1, title: "Crop category image", ratioLabel: "Category tile — square 1:1", maxEdge: 900, type: "image/jpeg", quality: 0.85, name: "category" },
+  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — 4:3 (used for the home tile and the category page header)", maxEdge: 1400, type: "image/jpeg", quality: 0.85, name: "category" },
     async (cropped) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", cropped); fd.append("category", category);
