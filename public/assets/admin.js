@@ -99,7 +99,9 @@ async function removeBranding(kind) {
 
 // ---- image cropper (fixed-ratio frame; drag + zoom the image inside it) ----
 // openCropper(file, opts, onDone, onCancel)
-//   opts: { ratio (w/h), title, ratioLabel, maxEdge, type, quality, name }
+//   opts: { ratio (w/h), title, ratioLabel, maxEdge, type, quality, name,
+//           deviceCrops:[{name,ratio}] — optional; draws a "safe area" showing
+//           what stays visible across those target aspect ratios }
 //   onDone(File)  — the cropped (or original) image, ready to upload
 function openCropper(file, opts, onDone, onCancel) {
   const ratio = opts.ratio || 1;
@@ -152,6 +154,23 @@ function openCropper(file, opts, onDone, onCancel) {
     imgEl.src = objURL;
     imgEl.style.width = natW + "px";
     imgEl.style.height = natH + "px";
+
+    // Responsive "safe area": the crop is one image but is shown at different
+    // aspect ratios per device (object-fit:cover), so edges get cut. Draw the
+    // region that stays visible on EVERY device and dim what falls outside it.
+    if (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) {
+      let insetX = 0, insetY = 0;
+      opts.deviceCrops.forEach((dc) => {
+        if (dc.ratio > ratio)      insetY = Math.max(insetY, (1 - ratio / dc.ratio) / 2); // wider device → top/bottom cut
+        else if (dc.ratio < ratio) insetX = Math.max(insetX, (1 - dc.ratio / ratio) / 2); // narrower device → sides cut
+      });
+      const safe = document.createElement("div");
+      safe.className = "crop-safe";
+      safe.style.left = safe.style.right = (insetX * 100) + "%";
+      safe.style.top = safe.style.bottom = (insetY * 100) + "%";
+      safe.innerHTML = '<span class="crop-safe-tag">Safe on all screens</span>';
+      stage.appendChild(safe);
+    }
 
     function clamp() {
       const dw = natW * scale, dh = natH * scale;
@@ -840,7 +859,10 @@ async function loadBanners() {
   else {
     el.innerHTML = banners.map(b =>
       '<div class="banner-item">' +
-        '<div class="banner-thumb"><img src="' + esc(b.image_url) + '" alt=""></div>' +
+        '<div class="banner-previews">' +
+          '<div class="bp-box bp-desktop"><img src="' + esc(b.image_url) + '" alt=""><span class="bp-tag">Desktop</span></div>' +
+          '<div class="bp-box bp-mobile"><img src="' + esc(b.image_url) + '" alt=""><span class="bp-tag">Mobile</span></div>' +
+        '</div>' +
         '<div class="banner-info">' +
           '<label>Link (category name or URL)</label>' +
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
@@ -867,7 +889,7 @@ async function uploadBanner() {
   const bannerRes = await api("/api/admin/banners");
   const currentCount = (bannerRes.data?.banners || []).length;
   if (currentCount >= 5) return toast("Maximum 5 banners allowed. Delete one first.");
-  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner — wide 16:7", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner" },
+  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner. Phones crop the sides, desktop crops the top & bottom — keep the important part inside the dashed “Safe on all screens” box", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile", ratio: 4 / 3 }, { name: "Desktop", ratio: 21 / 8 }] },
     async (file) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
@@ -903,7 +925,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (fi) fi.addEventListener("change", () => {
     if (!fi.files.length) return;
     const url = URL.createObjectURL(fi.files[0]);
-    document.getElementById("bnr_preview_img").src = url;
+    const d = document.getElementById("bnr_prev_d"), m = document.getElementById("bnr_prev_m");
+    if (d) d.src = url;
+    if (m) m.src = url;
     document.getElementById("bnr_preview").style.display = "block";
   });
 });

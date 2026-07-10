@@ -120,6 +120,7 @@ async function init() {
   loadCartFromStorage();
   renderNav();
   renderMobMenu();
+  syncStickyOffsets();
   // Check if URL specifies a category to open directly
   const urlCat = qs('cat');
   if (urlCat) { goCategory(decodeURIComponent(urlCat)); } else { goHome(); }
@@ -181,6 +182,7 @@ function syncStickyOffsets() {
   if (app) app.style.paddingTop = h + 'px';
 }
 window.addEventListener('resize', syncStickyOffsets);
+window.addEventListener('load', syncStickyOffsets);
 
 // ── Navbar ──
 function renderNav() {
@@ -214,11 +216,12 @@ function scheduleCloseDD() {}
 function toggleNavSearch() {
   const bar = document.getElementById('navSearchBar');
   const showing = bar.style.display !== 'none';
-  if (showing) { closeNavSearch(); } else { bar.style.display = 'block'; setTimeout(() => document.getElementById('navSearchInput').focus(), 50); }
+  if (showing) { closeNavSearch(); } else { bar.style.display = 'block'; syncStickyOffsets(); setTimeout(() => document.getElementById('navSearchInput').focus(), 50); }
 }
 function closeNavSearch() {
   const bar = document.getElementById('navSearchBar');
   if (bar) bar.style.display = 'none';
+  syncStickyOffsets();
   const inp = document.getElementById('navSearchInput');
   if (inp) inp.value = '';
 }

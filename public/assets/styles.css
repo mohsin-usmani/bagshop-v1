@@ -470,6 +470,14 @@ td input{padding:6px 8px}
 .banner-item{display:flex;gap:12px;align-items:flex-start;padding:12px;border-bottom:1px solid var(--line)}
 .banner-thumb{width:80px;height:50px;overflow:hidden;background:var(--bg2);flex-shrink:0}
 .banner-thumb img{width:100%;height:100%;object-fit:cover}
+/* Device previews — same image shown at the real mobile (4:3) and desktop (21:8)
+   hero shapes so the admin sees exactly what gets cropped on each screen. */
+.banner-previews{display:flex;gap:8px;align-items:flex-start;flex-shrink:0}
+.bp-box{position:relative;overflow:hidden;background:var(--bg2);border:1px solid var(--line)}
+.bp-box img{width:100%;height:100%;object-fit:cover;display:block}
+.bp-tag{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);color:#fff;font-size:9px;font-weight:700;text-align:center;letter-spacing:.5px;text-transform:uppercase;padding:1px 0}
+.bp-desktop{width:150px;aspect-ratio:21/8}
+.bp-mobile{width:66px;aspect-ratio:4/3}
 .banner-info{flex:1;min-width:0}
 .banner-link-input{font-size:13px;padding:6px 8px;border:1.5px solid var(--line);width:100%;font-family:inherit}
 .cat-img-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -488,6 +496,10 @@ td input{padding:6px 8px}
 .crop-grid{position:absolute;inset:0;pointer-events:none;border:1px solid rgba(255,255,255,.9);
   background-image:linear-gradient(rgba(255,255,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.35) 1px,transparent 1px);
   background-size:33.33% 33.33%;background-position:0 0}
+/* "Safe area" overlay in the cropper — the region visible on every target device.
+   The huge box-shadow dims everything outside the dashed box (clipped by the stage). */
+.crop-safe{position:absolute;pointer-events:none;z-index:2;border:2px dashed rgba(255,255,255,.95);box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
+.crop-safe-tag{position:absolute;top:5px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:3px;white-space:nowrap;text-transform:uppercase}
 .crop-controls{display:flex;align-items:center;gap:10px;padding:0 20px 12px}
 .crop-zoom{flex:1}
 .crop-foot{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
@@ -555,10 +567,12 @@ td input{padding:6px 8px}
 
 /* ── CATEGORY HERO ── */
 .cat-hero{position:relative;width:100%;overflow:hidden;background:#111}
-.cat-hero-img{width:100%;display:block;object-fit:cover;object-position:center;opacity:.55;aspect-ratio:12/5}
+/* Wide panoramic banner strip, Samsonite-style (source image is a 4:3 crop, so
+   3/1 is about as wide as it can go before slicing the photo to a thin band). */
+.cat-hero-img{width:100%;display:block;object-fit:cover;object-position:center;opacity:.55;aspect-ratio:3/1}
 @media(max-width:639px){.cat-hero-img{aspect-ratio:3/2}}
 /* fallback banner when a category has no uploaded image */
-.cat-hero-plain{aspect-ratio:12/5;background:linear-gradient(120deg,#075b7d,#00a1e0)}
+.cat-hero-plain{aspect-ratio:3/1;background:linear-gradient(120deg,#075b7d,#00a1e0)}
 @media(max-width:639px){.cat-hero-plain{aspect-ratio:5/2}}
 .cat-hero-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
 .cat-hero-name{font-size:36px;font-weight:900;color:#fff;letter-spacing:4px;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.4)}

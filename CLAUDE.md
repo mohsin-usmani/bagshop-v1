@@ -196,5 +196,6 @@ duplicate-article, price tiers, analytics)
 - Tokens stored **hashed** — never store or log raw tokens.
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
-- After deploy, bump the `?v=N` version on script tags in admin.html to bust CDN cache.
-  Current version: **v=9** (`common.js?v=9` and `admin.js?v=9`)
+- After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
+  Current versions: **admin.html = v=18**, **s.html (catalogue) = v=22**
+  (bump `common.js`, `admin.js`/`catalog.js`, and `styles.css` on the page you changed).
