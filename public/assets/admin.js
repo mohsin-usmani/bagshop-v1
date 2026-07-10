@@ -372,6 +372,25 @@ function renderCatList() {
   }
 }
 
+// Category picker: a text input (type a new or existing category) plus a native
+// <select> arrow. The datalist arrow only shows on desktop Chrome, so mobile had
+// no way to browse existing categories — the overlaid <select> opens the OS
+// picker on mobile AND a dropdown on desktop, while free-typing still works.
+function catComboHTML(inputId, value) {
+  const cats = [...new Set(ARTICLES.map((a) => a.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const opts = cats.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join("");
+  return '<div class="cat-combo">' +
+      '<input id="' + inputId + '" placeholder="Handbag" list="catList" autocomplete="off" value="' + esc(value || "") + '">' +
+      '<select class="cat-combo-select" aria-label="Choose an existing category" ' +
+        'onchange="if(this.value){document.getElementById(\'' + inputId + '\').value=this.value;}this.selectedIndex=0">' +
+        '<option value="">Choose existing…</option>' + opts +
+      '</select>' +
+      '<span class="cat-combo-arrow" aria-hidden="true">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+      '</span>' +
+    '</div>';
+}
+
 // renderArticles kept as no-op (list is now in stock; edit via modal)
 function renderArticles() {}
 
@@ -420,7 +439,7 @@ function renderWizardStep1() {
       '<div class="grid2">' +
         '<div class="field"><label>Article Code *</label><input id="wz1_code" placeholder="BAG-1023" autocomplete="off" value="' + esc(a.article_code || "") + '"></div>' +
         '<div class="field"><label>Name</label><input id="wz1_name" placeholder="Ladies Handbag" value="' + esc(a.name || "") + '"></div>' +
-        '<div class="field"><label>Category *</label><input id="wz1_cat" placeholder="Handbag" list="catList" value="' + esc(a.category || "") + '"></div>' +
+        '<div class="field"><label>Category *</label>' + catComboHTML("wz1_cat", a.category) + '</div>' +
         '<div class="field"><label>Price / piece (' + esc(cur) + ')</label><input id="wz1_price" type="number" placeholder="500" value="' + (a.base_price != null ? a.base_price : "") + '">' +
           '<p class="muted" style="font-size:11px;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400">Default price for every colour. In the next step you can leave each colour\'s price blank to use this, or override it only where a colour costs more.</p>' +
         '</div>' +
@@ -694,7 +713,7 @@ function buildEditModalHTML(a) {
       '<div class="grid2">' +
         '<div class="field"><label>Article Code</label><input id="ec_' + a.id + '" value="' + esc(a.article_code) + '"></div>' +
         '<div class="field"><label>Name</label><input id="en_' + a.id + '" value="' + esc(a.name || "") + '"></div>' +
-        '<div class="field"><label>Category</label><input id="ect_' + a.id + '" value="' + esc(a.category || "") + '" list="catList"></div>' +
+        '<div class="field"><label>Category</label>' + catComboHTML("ect_" + a.id, a.category) + '</div>' +
         '<div class="field"><label>Base Price (' + esc(cur) + ')</label><input id="ebp_' + a.id + '" type="number" value="' + (a.base_price ?? "") + '"></div>' +
       '</div>' +
       '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
@@ -882,25 +901,27 @@ async function loadBanners() {
   renderCatImgList();
 }
 
-async function uploadBanner() {
-  const fileInput = document.getElementById("bnr_file");
+// Picking a banner photo opens the crop preview immediately — same flow as
+// adding a product photo. The cropper shows both the Desktop (21:8) and Mobile
+// (4:3) shapes via the "safe area" overlay, so the ratio is written for both.
+async function onBannerFile(fileInput) {
+  if (!fileInput.files.length) return;
   const link = document.getElementById("bnr_link").value.trim();
-  if (!fileInput.files.length) return toast("Choose a photo first");
   const bannerRes = await api("/api/admin/banners");
   const currentCount = (bannerRes.data?.banners || []).length;
-  if (currentCount >= 5) return toast("Maximum 5 banners allowed. Delete one first.");
-  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner. Phones crop the sides, desktop crops the top & bottom — keep the important part inside the dashed “Safe on all screens” box", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile", ratio: 4 / 3 }, { name: "Desktop", ratio: 21 / 8 }] },
+  if (currentCount >= 5) { fileInput.value = ""; return toast("Maximum 5 banners allowed. Delete one first."); }
+  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner — Desktop 21:8 (wide) · Mobile 4:3. Phones crop the sides, desktop crops the top & bottom, so keep the important part inside the dashed “Safe on all screens” box", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile", ratio: 4 / 3 }, { name: "Desktop", ratio: 21 / 8 }] },
     async (file) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
       const res = await fetch("/api/admin/banners", { method: "POST", body: fd });
+      fileInput.value = "";
       if (!res.ok) return toast("Upload failed");
       toast("Banner added");
-      fileInput.value = "";
       document.getElementById("bnr_link").value = "";
-      document.getElementById("bnr_preview").style.display = "none";
       loadBanners();
-    });
+    },
+    () => { fileInput.value = ""; }); // reset on cancel so the same file can be re-picked
 }
 
 async function saveBannerLink(id) {
@@ -918,19 +939,6 @@ async function deleteBanner(id) {
   const { ok } = await api("/api/admin/banners?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (ok) { toast("Deleted"); loadBanners(); } else toast("Failed");
 }
-
-// Banner file preview
-document.addEventListener("DOMContentLoaded", () => {
-  const fi = document.getElementById("bnr_file");
-  if (fi) fi.addEventListener("change", () => {
-    if (!fi.files.length) return;
-    const url = URL.createObjectURL(fi.files[0]);
-    const d = document.getElementById("bnr_prev_d"), m = document.getElementById("bnr_prev_m");
-    if (d) d.src = url;
-    if (m) m.src = url;
-    document.getElementById("bnr_preview").style.display = "block";
-  });
-});
 
 // ---- category images ----
 function renderCatImgList() {

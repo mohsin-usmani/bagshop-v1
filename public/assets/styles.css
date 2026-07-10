@@ -435,6 +435,13 @@ img{display:block;max-width:100%}
 input,select,textarea{font:inherit;padding:9px 10px;border:1.5px solid var(--line);background:#fff;color:var(--text);width:100%}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand)}
 label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase}
+/* Category combobox: text input + an overlaid transparent <select> that supplies
+   a working dropdown arrow on every device (mobile has no datalist arrow). */
+.cat-combo{position:relative}
+.cat-combo input{padding-right:40px}
+.cat-combo input::-webkit-calendar-picker-indicator{opacity:0}/* hide native (desktop) datalist arrow — replaced by ours */
+.cat-combo-select{position:absolute;top:0;right:0;width:40px;height:100%;opacity:0;border:none;padding:0;margin:0;background:transparent;cursor:pointer;z-index:2}
+.cat-combo-arrow{position:absolute;top:0;right:0;width:40px;height:100%;display:flex;align-items:center;justify-content:center;pointer-events:none;color:var(--muted);z-index:1}
 .card{background:#fff;border:1px solid var(--line);box-shadow:none}
 .admin-topbar{background:var(--brand);color:#fff;padding:0;border-bottom:none}
 .admin-topbar .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:12px;padding-bottom:12px}

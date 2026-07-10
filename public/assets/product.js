@@ -109,7 +109,7 @@ function renderNav() {
   const bar = document.getElementById('navCatsBar');
   if (bar) {
     bar.innerHTML =
-      '<button class="nav-cat-link" onclick="history.back()">← Back</button>' +
+      '<button class="nav-cat-link" onclick="goBack()">← Back</button>' +
       cats.map(c =>
         '<button class="nav-cat-link" onclick="goCatalogCat(\'' + jq(c) + '\')">' + esc(c) + '</button>'
       ).join('') +
@@ -125,11 +125,26 @@ function goCatalogCat(cat) {
   window.location.href = base + (cat ? '&cat=' + encodeURIComponent(cat) : '');
 }
 
+// Logo → catalogue home. Always an explicit navigation (never history.back),
+// so it works even when this product page is the first entry in history
+// (e.g. link opened directly inside WhatsApp's in-app browser).
+function goHome() { goCatalogCat(''); }
+
+// Back arrow / breadcrumb → prefer a real back step so the customer keeps their
+// place in the listing, but fall back to the catalogue home when there is no
+// same-site history to go back to (otherwise the button would do nothing).
+function goBack() {
+  const ref = document.referrer || '';
+  const cameFromCatalogue = ref.indexOf(location.origin) === 0 && ref.indexOf('/s.html') !== -1;
+  if (cameFromCatalogue && window.history.length > 1) history.back();
+  else goHome();
+}
+
 function renderBreadcrumb() {
   const el = document.getElementById('pdpBreadcrumb');
   if (!el || !ARTICLE) return;
   el.innerHTML =
-    '<span onclick="history.back()" style="cursor:pointer;color:var(--brand)">← Catalogue</span>' +
+    '<span onclick="goBack()" style="cursor:pointer;color:var(--brand)">← Catalogue</span>' +
     '<span class="bc-sep"> / </span>' +
     (ARTICLE.category ? '<span onclick="goCatalogCat(\'' + jq(ARTICLE.category) + '\')" style="cursor:pointer">' + esc(ARTICLE.category) + '</span><span class="bc-sep"> / </span>' : '') +
     '<span style="color:var(--muted)">' + esc(ARTICLE.name || ARTICLE.article_code) + '</span>';

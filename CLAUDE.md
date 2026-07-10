@@ -178,7 +178,7 @@ The 20s timeout in `api()` covers the worst-case cold start.
 | Variable | Value |
 |---|---|
 | `DEV` | `0` (production) |
-| `ALLOWED_EMAILS` | `mauhidusmani@gmail.com` (owner's email) |
+| `ALLOWED_EMAILS` | `1mohsinusmani@gmail.com,mauhidusmani@gmail.com,ulhaqinzamam61@gmail.com` (comma-separated admins) |
 
 Bindings: `DB` → D1 database `bagshop`, `BUCKET` → R2 bucket `bagshop-photos`
 
@@ -197,5 +197,5 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=18**, **s.html (catalogue) = v=22**
+  Current versions: **admin.html = v=19**, **product.html = v=19**, **s.html (catalogue) = v=22**
   (bump `common.js`, `admin.js`/`catalog.js`, and `styles.css` on the page you changed).

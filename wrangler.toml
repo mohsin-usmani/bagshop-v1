@@ -18,4 +18,4 @@ bucket_name = "bagshop-photos"
 # ALLOWED_EMAILS = comma-separated emails allowed into the admin (matches Cloudflare Access).
 [vars]
 DEV = "0"
-ALLOWED_EMAILS = "1mohsinusmani@gmail.com,mauhidusmani@gmail.com"
+ALLOWED_EMAILS = "1mohsinusmani@gmail.com,mauhidusmani@gmail.com,ulhaqinzamam61@gmail.com"
