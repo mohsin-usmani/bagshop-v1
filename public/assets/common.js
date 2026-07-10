@@ -45,6 +45,35 @@ function toast(msg) {
   el._t = setTimeout(() => el.classList.remove("show"), 1800);
 }
 
+// ── Branding (admin-uploaded logo + favicon) ──
+function setFavicon(href) {
+  if (!href) return;
+  let link = document.querySelector('link[rel="icon"]');
+  if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+  link.type = /\.svg(\?|$)/i.test(href) ? "image/svg+xml" : "image/png";
+  link.href = href;
+}
+// Swap the inline SVG wordmark(s) for the uploaded logo image (keeps their height).
+function applyHeaderLogo(shop) {
+  if (!shop || !shop.logo_url) return;
+  document.querySelectorAll(".nav-logo-svg, img.nav-logo-img").forEach((el) => {
+    if (el.tagName.toLowerCase() === "img") { el.src = shop.logo_url; return; }
+    const img = document.createElement("img");
+    img.src = shop.logo_url;
+    img.alt = shop.name || "Logo";
+    img.className = "nav-logo-img";
+    const st = el.getAttribute("style") || "";
+    const m = st.match(/height:\s*([^;]+)/);
+    if (m) img.style.height = m[1].trim();
+    el.replaceWith(img);
+  });
+}
+function applyBranding(shop) {
+  if (!shop) return;
+  setFavicon(shop.favicon_url);
+  applyHeaderLogo(shop);
+}
+
 // Resize/compress an image File in the browser to keep storage tiny + catalogue fast.
 function compressImage(file, maxEdge = 1000, quality = 0.82) {
   return new Promise((resolve) => {

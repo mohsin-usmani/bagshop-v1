@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FinEx Admin</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%231B1B1B' stroke='white' stroke-width='5'/%3E%3Ctext x='50' y='68' text-anchor='middle' fill='white' font-family='Arial Black%2Csans-serif' font-size='30' font-weight='900'%3EFinEx%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%233b4cca'/%3E%3Ctext x='50' y='69' text-anchor='middle' fill='white' font-family='Arial%2Csans-serif' font-weight='700' font-style='italic' font-size='50'%3EFx%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
@@ -12,14 +12,8 @@
 <div class="admin-topbar">
   <div class="wrap">
     <div class="admin-brand">
-      <svg class="nav-logo-svg" style="color:#fff" viewBox="0 0 232 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
-        <path d="M0,0H44V13H13V24H38V37H13V60H0Z" fill="currentColor"/>
-        <rect x="49" y="0" width="13" height="12" fill="currentColor"/>
-        <rect x="49" y="18" width="13" height="42" fill="currentColor"/>
-        <path d="M67,60V0H110V60H97V13H80V60Z" fill="currentColor"/>
-        <path d="M115,0H159V13H128V24H153V37H128V47H159V60H115Z" fill="currentColor"/>
-        <polygon points="164,6 170,0 182,0 232,54 226,60 214,60" fill="currentColor"/>
-        <polygon points="214,0 226,0 232,6 182,60 170,60 164,54" fill="currentColor"/>
+      <svg class="nav-logo-svg" style="color:#fff" viewBox="0 0 172 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx">
+        <text x="0" y="46" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="50" letter-spacing="-1.5" fill="currentColor">FinEx</text>
       </svg>
       <div class="admin-brand-name" id="hdrName">Admin</div>
     </div>
@@ -81,6 +75,13 @@
       </div>
     </div>
     <div id="catManagerList"></div>
+
+    <!-- Header menu (customer top nav) -->
+    <div style="margin-top:32px">
+      <div class="hd"><h3>Header menu</h3></div>
+      <p class="muted" style="margin-top:0;margin-bottom:16px">Choose up to <strong>10</strong> categories to show in the top menu bar on the customer site, and set their order. If you don't choose any, the first 10 categories are shown automatically.</p>
+      <div class="card artcard" id="navMenuEditor"></div>
+    </div>
   </div>
 
   <!-- BANNERS -->
@@ -133,6 +134,7 @@
     </div>
     <div id="linkResult"></div>
     <h3 style="margin-top:18px">Active &amp; recent links</h3>
+    <p class="muted" style="margin-top:0;margin-bottom:12px;font-size:13px">Links are removed automatically 7 days after they're created.</p>
     <div id="linkList"></div>
   </div>
 
@@ -140,12 +142,35 @@
   <div class="panel" id="p-orders">
     <h3>Orders received</h3>
     <p class="muted" style="margin-top:0;margin-bottom:12px">A copy of every cart sent to you. The conversation itself is on WhatsApp.</p>
+    <div style="position:relative;margin-bottom:14px;max-width:420px">
+      <input id="orderSearch" placeholder="Search by customer name…" oninput="renderOrders()" autocomplete="off"
+        style="width:100%;padding:9px 36px 9px 12px;border:1px solid var(--line);font-size:14px;border-radius:2px;font-family:inherit">
+      <svg style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    </div>
     <div id="orderList"></div>
   </div>
 
   <!-- SETTINGS -->
   <div class="panel" id="p-settings">
     <h3>Settings</h3>
+
+    <div class="card artcard" style="max-width:560px">
+      <h4 style="margin-bottom:4px">Branding</h4>
+      <p class="muted" style="margin-top:0;margin-bottom:16px;font-size:13px">Upload your own logo and browser-tab icon. Leave empty to use the built-in defaults.</p>
+      <div class="field">
+        <label>Header logo (customer site)</label>
+        <div id="logoPreview" class="brand-preview"></div>
+        <input type="file" accept="image/*" id="logo_file" onchange="uploadBranding('logo',this)">
+        <p class="muted" style="font-size:11px;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400">A wide/landscape image. PNG with a transparent background looks best.</p>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Favicon (browser tab icon)</label>
+        <div id="faviconPreview" class="brand-preview brand-preview-sq"></div>
+        <input type="file" accept="image/*" id="favicon_file" onchange="uploadBranding('favicon',this)">
+        <p class="muted" style="font-size:11px;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400">A small square image (PNG or SVG). Transparent background recommended.</p>
+      </div>
+    </div>
+
     <div class="card artcard" style="max-width:560px">
       <div class="field"><label>Shop name</label><input id="st_name"></div>
       <div class="field"><label>Your WhatsApp number (orders go here — country code, no +)</label><input id="st_phone" placeholder="919198xxxxxx12"></div>
@@ -175,7 +200,7 @@
   </div>
 </div>
 
-<script src="/assets/common.js?v=10"></script>
-<script src="/assets/admin.js?v=10"></script>
+<script src="/assets/common.js?v=16"></script>
+<script src="/assets/admin.js?v=16"></script>
 </body>
 </html>

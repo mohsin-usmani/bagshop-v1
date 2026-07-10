@@ -44,7 +44,15 @@
       "Bash(DEST=\"/c/Users/sw/Desktop/bag/bagshop-v1/bagshop-v1/design-reference/samsonite-scrape/www.samsonite.in\" *)",
       "Bash(node --check public/assets/admin.js)",
       "Bash(node --check public/assets/common.js)",
-      "Bash(node --check public/assets/catalog.js)"
+      "Bash(node --check public/assets/catalog.js)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(node --check functions/api/admin/orders.js)",
+      "Bash(python -c \"import PIL; print\\('Pillow', PIL.__version__\\)\")",
+      "Bash(python -m pip install --quiet Pillow)",
+      "Bash(python -c \"import PIL; print\\('Pillow ready:', PIL.__version__\\)\")",
+      "Bash(node --check functions/api/admin/tokens.js)",
+      "Bash(node --check functions/api/admin/articles.js)"
     ]
   }
 }

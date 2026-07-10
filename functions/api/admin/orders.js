@@ -13,3 +13,12 @@ export async function onRequestGet(context) {
   });
   return json({ orders });
 }
+
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+  if (!isAdmin(context)) return json({ error: "auth" }, 401);
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return json({ error: "no_id" }, 400);
+  await env.DB.prepare("DELETE FROM orders WHERE id=?").bind(id).run();
+  return json({ ok: true });
+}

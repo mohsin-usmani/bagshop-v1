@@ -24,9 +24,12 @@ export async function onRequestPost(context) {
   const b = await request.json();
   const id = newId();
   const now = Date.now();
+  // New products are created hidden by default. They only go live when the admin
+  // turns on "Show to customers" (step 3 of the wizard). Pass is_active:1 to override.
+  const isActive = b.is_active ? 1 : 0;
   await env.DB.prepare(
-    "INSERT INTO articles (id, article_code, name, category, description, base_price, is_active, created_at) VALUES (?,?,?,?,?,?,1,?)"
-  ).bind(id, b.article_code || "", b.name || "", b.category || "", b.description || "", b.base_price ?? null, now).run();
+    "INSERT INTO articles (id, article_code, name, category, description, base_price, is_active, created_at) VALUES (?,?,?,?,?,?,?,?)"
+  ).bind(id, b.article_code || "", b.name || "", b.category || "", b.description || "", b.base_price ?? null, isActive, now).run();
 
   if (Array.isArray(b.variants)) {
     for (const v of b.variants) {

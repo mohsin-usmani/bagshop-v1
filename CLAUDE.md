@@ -11,105 +11,190 @@ and **prices**, build a cart, and send a structured order to the owner's **Whats
 negotiation, billing, and payment continue on WhatsApp exactly as before. Max ~100 low-frequency
 customers. Must run at **₹0/month**.
 
-The old pain: the owner manually typed the same catalogue/stock to every buyer on WhatsApp all day,
-and got flagged/blocked as a spammer. This app flips it to **inbound, customer-initiated** ordering,
-which removes both the repetition and the spam-ban risk.
-
 ## Current status
 
-- **Phase 0 (Scaffold) — COMPLETE.** The full v1 codebase in this repo. Syntax-checked; schema
-  validated in SQLite. **Not yet deployed** to Cloudflare, and **not yet loaded with real data.**
-- Next up is **Phase 1 (Setup & deploy)** — see "Immediate next steps".
+- **Phase 1 (Setup & deploy) — COMPLETE.** Deployed to Cloudflare Pages at `bagshop-1p8.pages.dev`.
+  D1 database created, schema applied, ~70 articles loaded with real data. CF Access configured.
+- **Phase 2 (Load real data) — COMPLETE.** Owner has added ~70 real products via admin panel.
+- Next up is **Phase 3 (Pilot)** — share links with 3–5 customers and test the order flow.
 
 ## Locked decisions (do not re-litigate without asking the user)
 
-1. **Stack: Cloudflare-native, free tier.** Cloudflare Pages (site) + Pages Functions (API) + D1
-   (SQLite DB) + R2 (photos) + Cloudflare Access (admin login). Chosen over Supabase because it has
-   no 7-day inactivity pause and no surprise-bill mechanism.
+1. **Stack: Cloudflare-native, free tier.** Pages + Pages Functions + D1 + R2 + CF Access.
 2. **Show prices in the catalogue: YES.**
-3. **No WhatsApp Business API.** Use free `wa.me` deep links for both directions (owner→customer link
-   delivery, customer→owner order). The owner already sees incoming messages on his phone, so there is
-   NO "auto-detect incoming message" subsystem — approval = the owner generating a link in the admin.
-4. **Customers do not log in.** Access is a secret, expiring magic link: `/s/<token>` (token hashed in
-   DB, server-enforced expiry, revocable).
-5. **Single-tenant** (one shop). Keep the schema clean so it *could* go multi-tenant later, but do not
-   build multi-tenant now.
-6. **Payments & fulfilment stay on WhatsApp.** Do not build payments.
-7. **Vanilla HTML/CSS/JS frontend, no build step.** Do not introduce React/Vite/bundlers — the whole
-   point is low maintenance and zero-build deploys on Pages.
+3. **No WhatsApp Business API.** Use free `wa.me` deep links.
+4. **Customers do not log in.** Secret expiring magic link `/s/<token>`.
+5. **Single-tenant** (one shop).
+6. **Payments & fulfilment stay on WhatsApp.**
+7. **Vanilla HTML/CSS/JS frontend, no build step.**
+8. **CF Access team:** `little-credit-ba79`. App: `bagshop-1p8.pages.dev`.
 
 ## Architecture / file map
 
 ```
-schema.sql                 D1 tables + a little SAMPLE data (delete sample rows once real data is in)
-wrangler.toml              Cloudflare bindings — fill in your real D1 database_id
-README.md                  full human setup guide (deploy steps, what-owner-provides)
+schema.sql                 D1 tables + sample data (sample rows already deleted, real data loaded)
+wrangler.toml              Cloudflare bindings — D1 database_id already filled in
 
-public/                    static site (served by Pages)
-  index.html               landing (points to /admin.html)
-  s.html + assets/catalog.js   CUSTOMER catalogue: reads ?t=<token>, filters, cart, wa.me handoff
-  admin.html + assets/admin.js OWNER panel: Stock / Articles / Customer Links / Orders / Settings
+public/
+  index.html               landing
+  s.html + assets/catalog.js   CUSTOMER catalogue
+  admin.html + assets/admin.js OWNER admin panel
+  product.html + assets/product.js  product detail page
   assets/styles.css        shared styling (teal #0E6B57 / amber #E0A03C / ink #12332B)
-  assets/common.js         fetch helper, toast, browser-side image compression before upload
+  assets/common.js         fetch helper (with 20s AbortController timeout), toast, image compression
+  _headers                 Cache-Control: no-store on /admin.html
 
-functions/                 the API (Cloudflare Pages Functions, file-based routing)
-  api/_util.js             shared helpers: json(), sha256hex(), token gen, isAdmin(), validToken()
-  api/catalog.js           GET /api/catalog?token=…   (public, token-gated) → shop + filtered articles
-  api/order.js             POST /api/order            (public, token-gated) → logs order, returns wa.me link
-  api/img/[[path]].js      GET /api/img/<key>         → streams a photo from R2
-  api/admin/articles.js    GET/POST/PATCH/DELETE articles (+ variants on create)
-  api/admin/variants.js    POST add; PATCH bulk stock/price save (daily hot path); DELETE
-  api/admin/photos.js      POST multipart upload → R2 + row; DELETE
-  api/admin/tokens.js      GET list; POST create link (returns raw link once); PATCH revoke
+functions/
+  api/_util.js             shared: json(), sha256hex(), checkAdmin(), isAdmin(), validToken()
+  api/catalog.js           GET /api/catalog?token=…
+  api/order.js             POST /api/order
+  api/img/[[path]].js      GET /api/img/<key> → R2 stream
+  api/admin/_middleware.js  auth gate for ALL /api/admin/* routes (runs before every endpoint)
+  api/admin/articles.js    GET/POST/PATCH/DELETE articles (GET runs 3 D1 queries in parallel)
+  api/admin/variants.js    POST add; PATCH bulk stock/price; DELETE
+  api/admin/photos.js      POST upload → R2; DELETE
+  api/admin/tokens.js      GET list; POST create; PATCH revoke
   api/admin/orders.js      GET order log
-  api/admin/settings.js    GET/POST shop_name, owner_phone, currency, show_prices, default_link_hours
-  s/[token].js             pretty link /s/<token> → 302 redirect to /s.html?t=<token>
+  api/admin/settings.js    GET/POST shop settings
+  api/admin/login-bounce.js  GET → 302 /admin.html (CF Access login trigger — see Auth section)
+  api/admin/status.js      GET → {auth, articles_in_db, variants_in_db} (diagnostic)
+  api/admin/banners.js     banner management
+  api/admin/categories.js  category management
+  api/admin/category-images.js  category image management
+  s/[token].js             /s/<token> → 302 /s.html?t=<token>
 ```
 
-### Data model (D1 / SQLite)
-`settings(key,value)` · `articles(id, article_code, name, category, description, base_price, is_active, created_at)`
-· `variants(id, article_id, color, size, price, available_qty, is_active, updated_at)` (stock folded in here)
-· `photos(id, article_id, color, url, sort_order)` · `access_tokens(id, token_hash, customer_label,
-customer_phone, created_at, expires_at, is_revoked)` · `orders(id, token_id, customer_label, items_json,
-est_total, created_at, status)`.
+## CF Access configuration (CRITICAL — do not change)
 
-### The 3 core flows
-- **Owner updates shop:** Admin → Stock → edit qty/price → Save (bulk PATCH /api/admin/variants).
-- **Approve a customer:** Admin → Customer Links → create (label, phone, hours) → "Send on WhatsApp".
-- **Customer orders:** open link → filter/cart → "Send Order on WhatsApp" → POST /api/order logs it and
-  returns a `wa.me/<owner>?text=…` link → opens WhatsApp with the itemised order.
+CF Access (Zero Trust → Access → Applications → bagshop-admin) protects:
+- `bagshop-1p8.pages.dev` / `admin*`    ← covers /admin AND /admin.html
+- `bagshop-1p8.pages.dev` / `api/admin/*`
 
-## Immediate next steps (Phase 1 — deploy). Help the user do these:
+**Why both:** admin.html is served at `/admin` (Clean URL) which is different from `/admin.html`.
+Without `admin*`, CF Access only intercepts `/admin.html` and the clean URL loads without login.
 
-1. `npm install -g wrangler` then `wrangler login`.
-2. `wrangler d1 create bagshop` → paste the printed `database_id` into `wrangler.toml`.
-3. `wrangler r2 bucket create bagshop-photos`.
-4. `wrangler d1 execute bagshop --file=./schema.sql --remote`.
-5. Local test: `DEV=1 wrangler pages dev public --d1 DB=bagshop --r2 BUCKET=bagshop-photos` → open /admin.html.
-6. Deploy: `wrangler pages deploy public --project-name bagshop`.
-7. In the CF dashboard, add bindings `DB`→bagshop, `BUCKET`→bagshop-photos, env `DEV=0`,
-   `ALLOWED_EMAILS=<owner email>`.
-8. **Cloudflare Access (Zero Trust)** over paths `admin.html` and `api/admin/*`, allow owner's email.
-9. Custom domain → the owner's domain. Then Settings: shop name, **owner WhatsApp number** (country
-   code, no `+`), currency, show_prices = Yes.
+**Login flow for Sign In button:**
+`doSignIn()` → navigates to `/api/admin/login-bounce` → CF Access intercepts (no session) →
+shows CF Access login page → user authenticates → CF Access redirects back to login-bounce →
+login-bounce returns 302 to `/admin.html` → admin loads with valid session.
 
-Full detail is in `README.md`.
+**Why login-bounce instead of direct CF Access URL:**
+Going to `https://little-credit-ba79.cloudflareaccess.com/cdn-cgi/access/login/<domain>` requires
+a `kid` (app AUD) parameter that we can't reliably get client-side. login-bounce sidesteps this
+by navigating to a CF-Access-protected URL directly, letting CF Access handle the redirect.
 
-## What the owner still needs to provide
-Cloudflare account + DNS access; the WhatsApp number orders go to; shop name/logo; and the catalogue
-content: categories (bag types), colours & sizes, articles (code/name, price/pc, qty), and photos.
+## Auth architecture
 
-## Conventions & guardrails for you (the AI)
-- Stay **free-tier only**. No paid add-ons, no heavy dependencies, no build step.
-- **Security:** admin API depends on Cloudflare Access + the `isAdmin()` check. Keep `DEV=0` in
-  production. Never commit secrets; the D1 `database_id` is fine to commit, access tokens are not.
-- Tokens are stored **hashed** — never store or log raw tokens.
-- This is a **v1 scaffold**: expect small fixes as it meets real Cloudflare + real data. That's normal.
-- Remember to **delete the sample rows** in `schema.sql`/DB once the owner's real data is loaded.
-- When unsure about a product/deploy detail, check the official Cloudflare and Claude Code docs rather
-  than guessing.
+### Backend (`functions/api/_util.js`)
+`checkAdmin(context)` returns `{ok, reason, email}`:
+1. If `DEV=1` env → always OK (local dev only, never in production)
+2. Check `Cf-Access-Authenticated-User-Email` header (injected by CF Access for protected paths) → preferred
+3. Fall back to `CF_Authorization` JWT cookie (set by CF Access at login)
+   - Checks email is present in JWT payload
+   - **Does NOT check JWT expiry** — CF Access manages session lifecycle; our exp check was wrongly
+     rejecting valid sessions when CF Access hadn't yet expired them
+   - Checks email is in `ALLOWED_EMAILS` env var (comma-separated)
+4. `isAdmin(context)` is a boolean alias kept for backward compat (individual endpoints still call it)
+
+### Middleware (`functions/api/admin/_middleware.js`)
+Runs before ALL `/api/admin/*` endpoints. Returns `{error:"auth", reason, email}` with 401 if
+auth fails, otherwise calls `context.next()`. Individual `isAdmin()` checks in each endpoint file
+are now redundant but harmless.
+
+### Frontend (`public/assets/common.js` → `api()` function)
+- 20-second AbortController timeout on every fetch
+- If fetch **throws** (CORS failure from CF Access cross-origin redirect): dispatches `apiauthfail` event
+- If fetch returns **HTML** (CF Access login page served same-origin): dispatches `apiauthfail` event
+- If fetch **times out** (AbortError): returns `{data: null}` — NOT treated as auth failure
+
+### Frontend (`public/assets/admin.js`)
+Key globals: `AUTH_FAIL_FIRED` flag prevents authFail racing when multiple API calls fail simultaneously.
+
+`authFail(data)`:
+- If `AUTH_FAIL_FIRED` already true → return (deduplication)
+- Sets `AUTH_FAIL_FIRED = true`
+- reason `cf_redirect` AND first load (no `?_cf` in URL) → navigate to `/admin.html?_cf=1`
+  (gives CF Access one chance to intercept the reload)
+- All other reasons OR second load → replace `document.body.innerHTML` with sign-in screen
+- Sign-in screen has a "Sign In" button that calls `doSignIn()`
+
+`doSignIn()`: `window.location.href = '/api/admin/login-bounce'`
+
+`loadAll()`:
+- Resets `AUTH_FAIL_FIRED = false`
+- Runs `loadSettings()` and `loadArticles()` in parallel
+- If either throws → `authFail({error:"auth", reason:"no_session"})`
+- If `AUTH_FAIL_FIRED` after both complete → skip secondary loads (loadLinks, loadOrders, etc.)
+
+`loadArticles()` timeout handling:
+- `artRes.data === null` (timeout or unexpected) → shows "Took too long — Retry" button in stockTable
+  (NOT an authFail — user may be logged in but D1 had a cold start)
+- `artRes.data.error` → authFail
+
+## Admin panel features implemented
+
+### Stock tab
+- Table: article code, name, colour, size, price (editable), qty (editable), live toggle, Edit button
+- **Search** by code, name, or category (live filter)
+- **Sort by**: Newest first / Oldest first / A→Z / Z→A / By category
+- **Save Changes** button: bulk PATCH to `/api/admin/variants`
+- **Edit button** (✏): opens edit modal for article details, variants, photos
+
+### Add Product (3-step wizard)
+- Step 1: article code, name, category (datalist), description, base price
+  - **Duplicate code check**: compares against existing `ARTICLES` array before submitting,
+    shows error toast and red border if duplicate found
+- Step 2: add colour/size/qty/price variants
+- Step 3: upload photos (compressed client-side before upload)
+
+### Other tabs
+- Categories: create/rename/delete (rename cascades to all articles)
+- Banners: homepage slider images with category/article code links; category tile images
+- Customer Links: create expiring magic links, copy/WhatsApp share, revoke
+- Orders: log of all orders submitted via wa.me flow
+- Settings: shop name, owner WhatsApp, currency, show_prices, about, Instagram, Facebook
+
+## D1 performance note
+
+On Cloudflare free tier, D1 has cold starts (~3–8 seconds after inactivity). The articles GET
+endpoint runs **3 queries in parallel** (articles, variants, photos) via `Promise.all` to minimize
+this. First load after inactivity may take 5–10 seconds; subsequent loads are fast (<1s).
+The 20s timeout in `api()` covers the worst-case cold start.
+
+## Data model (D1 / SQLite)
+
+`settings(key, value)`
+`articles(id, article_code, name, category, description, base_price, is_active, is_new_arrival, created_at)`
+`variants(id, article_id, color, size, price, available_qty, is_active, updated_at)`
+`photos(id, article_id, color, url, sort_order)`
+`access_tokens(id, token_hash, customer_label, customer_phone, created_at, expires_at, is_revoked)`
+`orders(id, token_id, customer_label, items_json, est_total, created_at, status)`
+`banners(id, url, link, sort_order, created_at)`
+`categories(id, name, created_at)`
+`category_images(id, category, image_url, updated_at)`
+
+## Cloudflare environment variables (Pages → Settings → Environment Variables)
+
+| Variable | Value |
+|---|---|
+| `DEV` | `0` (production) |
+| `ALLOWED_EMAILS` | `mauhidusmani@gmail.com` (owner's email) |
+
+Bindings: `DB` → D1 database `bagshop`, `BUCKET` → R2 bucket `bagshop-photos`
 
 ## Roadmap
-Phase 0 Scaffold ✅ · Phase 1 Setup & deploy (next) · Phase 2 Load real data · Phase 3 Pilot with 3–5
-customers · Phase 4 Go live on the domain · Phase 5 Enhancements (low-stock badges, hide out-of-stock,
-reorder-last-order, duplicate-article, price tiers, analytics; WhatsApp Cloud API only if volume grows).
+
+Phase 0 Scaffold ✅ · Phase 1 Setup & deploy ✅ · Phase 2 Load real data ✅ ·
+Phase 3 Pilot with 3–5 customers (next) · Phase 4 Go live on domain ·
+Phase 5 Enhancements (low-stock badges, hide out-of-stock, reorder-last-order,
+duplicate-article, price tiers, analytics)
+
+## Conventions & guardrails
+
+- Stay **free-tier only**. No paid add-ons, no heavy dependencies, no build step.
+- **Security:** Keep `DEV=0` in production. Never commit secrets.
+- Tokens stored **hashed** — never store or log raw tokens.
+- **No build step** — vanilla HTML/CSS/JS only.
+- Deploy command: `wrangler pages deploy public --project-name bagshop`
+- After deploy, bump the `?v=N` version on script tags in admin.html to bust CDN cache.
+  Current version: **v=9** (`common.js?v=9` and `admin.js?v=9`)

@@ -116,6 +116,7 @@ async function init() {
   SHOW_PRICES = !!data.shop.show_prices;
   document.getElementById('navShopName').textContent = data.shop.name || '';
   document.getElementById('mobShopName').textContent = data.shop.name || '';
+  applyBranding(data.shop);
   loadCartFromStorage();
   renderNav();
   renderMobMenu();
@@ -171,7 +172,11 @@ function renderApp() {
 
 // ── Navbar ──
 function renderNav() {
-  const cats = DATA ? DATA.filters.categories || [] : [];
+  // Header shows the admin-controlled menu list (max 10), falling back to the
+  // first 10 categories if none configured.
+  const cats = DATA
+    ? ((DATA.nav_categories && DATA.nav_categories.length ? DATA.nav_categories : (DATA.filters.categories || [])).slice(0, 10))
+    : [];
   const bar = document.getElementById('navCatsBar');
   if (!bar) return;
   bar.innerHTML =

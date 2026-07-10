@@ -43,6 +43,12 @@ export async function onRequestPatch(context) {
     const cats = existing.value.split(',').map(c => c === old_name ? trimmed : c);
     await env.DB.prepare("UPDATE settings SET value=? WHERE key='category_list'").bind(cats.join(',')).run();
   }
+  // Keep the header menu selection in sync with the rename.
+  const nav = await env.DB.prepare("SELECT value FROM settings WHERE key='nav_categories'").first();
+  if (nav && nav.value) {
+    const navCats = nav.value.split(',').map(c => c.trim() === old_name ? trimmed : c);
+    await env.DB.prepare("UPDATE settings SET value=? WHERE key='nav_categories'").bind(navCats.join(',')).run();
+  }
   return json({ ok: true });
 }
 
@@ -56,6 +62,12 @@ export async function onRequestDelete(context) {
   if (existing && existing.value) {
     const cats = existing.value.split(',').filter(c => c !== name);
     await env.DB.prepare("UPDATE settings SET value=? WHERE key='category_list'").bind(cats.join(',')).run();
+  }
+  // Remove the deleted category from the header menu too.
+  const nav = await env.DB.prepare("SELECT value FROM settings WHERE key='nav_categories'").first();
+  if (nav && nav.value) {
+    const navCats = nav.value.split(',').filter(c => c.trim() !== name);
+    await env.DB.prepare("UPDATE settings SET value=? WHERE key='nav_categories'").bind(navCats.join(',')).run();
   }
   return json({ ok: true });
 }

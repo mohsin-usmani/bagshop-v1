@@ -36,6 +36,12 @@ export async function onRequestGet(context) {
   const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
   const sizes = [...new Set(variants.map((v) => v.size).filter(Boolean))];
 
+  // Header menu: admin-picked, ordered categories (max 10). Only keep ones that
+  // currently exist. Falls back to the first 10 categories if unconfigured.
+  const navPicked = (settings.nav_categories || "").split(",").map((s) => s.trim()).filter(Boolean);
+  let nav_categories = navPicked.filter((c) => categories.includes(c)).slice(0, 10);
+  if (!nav_categories.length) nav_categories = categories.slice(0, 10);
+
   const category_images = {};
   for (const r of catImgRows) category_images[r.category] = r.image_url;
 
@@ -48,9 +54,12 @@ export async function onRequestGet(context) {
       instagram_url: settings.instagram_url || "",
       facebook_url: settings.facebook_url || "",
       tagline: settings.tagline || "",
+      logo_url: settings.logo_url || "",
+      favicon_url: settings.favicon_url || "",
     },
     customer: tok.customer_label || "",
     filters: { categories, colors, sizes },
+    nav_categories,
     articles: list,
     banners,
     category_images,

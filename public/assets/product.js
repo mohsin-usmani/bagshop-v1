@@ -73,6 +73,7 @@ async function init() {
   CUR = data.shop.currency || 'Rs.';
   SHOW_PRICES = !!data.shop.show_prices;
   document.getElementById('navShopName').textContent = data.shop.name || '';
+  applyBranding(data.shop);
 
   ARTICLE = data.articles.find(a => String(a.id) === String(PRODUCT_ID));
   if (!ARTICLE) return showError('Product not found.');
