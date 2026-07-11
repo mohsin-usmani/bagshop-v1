@@ -458,23 +458,6 @@ function catComboHTML(inputId, value) {
 // renderArticles kept as no-op (list is now in stock; edit via modal)
 function renderArticles() {}
 
-async function saveArticle(id) {
-  const body = {
-    id,
-    article_code:   val("ec_" + id),
-    name:           val("en_" + id),
-    category:       val("ect_" + id),
-    base_price:     val("ebp_" + id) ? Number(val("ebp_" + id)) : null,
-    description:    (document.getElementById("edd_" + id) || {}).value?.trim() || "",
-    is_active:      1, // no article on/off switch — visibility is driven by the per-colour Live toggle + stock
-    is_new_arrival: !!(document.getElementById("ena_" + id) || {}).checked,
-  };
-  if (!body.article_code || !body.category) return toast("Code and category are required");
-  const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (ok) { toast("Article updated"); loadArticles(); }
-  else toast("Save failed");
-}
-
 // ---- add-product wizard ----
 function showWizard() {
   WIZARD_AID = null;
@@ -760,24 +743,32 @@ function buildEditModalHTML(a) {
   const cur = SETTINGS.currency || "Rs.";
   const knownColors = [...new Set(a.variants.map(v => v.color).filter(Boolean))];
   const colorOpts = knownColors.map(c => '<option>' + esc(c) + '</option>').join('');
+  const info = stockLiveInfo(a);
+  const statusPill = info.live ? '<span class="live-badge">● Live</span>' : '<span class="notlive-badge">Not live</span>';
+
   const vs = a.variants.map(v =>
-    '<div class="line">' +
-      '<div style="flex:1;min-width:80px;font-size:13px">' + esc(v.color || '—') + ' · ' + esc(v.size || '—') + '</div>' +
-      '<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '" placeholder="Qty" style="width:62px;padding:5px 6px">' +
-      '<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="Price" style="width:76px;padding:5px 6px">' +
-      '<button class="btn sm ghost" style="padding:5px 8px;flex-shrink:0" onclick="saveVariant(' + jq(v.id) + ')">✓</button>' +
-      '<span class="x" style="flex-shrink:0;margin-left:0" onclick="delVariant(' + jq(v.id) + ')">✕</span>' +
+    '<div class="ev-row">' +
+      '<div class="ev-vlabel">' + esc(v.color || '—') + ' · ' + esc(v.size || '—') + '</div>' +
+      '<label class="ev-mini">Qty<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '"></label>' +
+      '<label class="ev-mini">Price<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="' + (a.base_price ?? '') + '"></label>' +
+      '<button class="ev-del" title="Remove this colour / size" onclick="delVariant(' + jq(v.id) + ')">✕</button>' +
     '</div>'
-  ).join('') || '<p class="muted" style="font-size:13px">No colours/sizes yet.</p>';
+  ).join('') || '<p class="muted" style="font-size:13px">No colours or sizes yet — add one below.</p>';
+
   const photos = (a.photos || []).map(p =>
     '<div class="t"><img src="' + esc(p.url) + '">' +
       (p.color ? '<div style="font-size:10px;text-align:center;color:var(--muted)">' + esc(p.color) + '</div>' : '') +
       '<span class="rm" onclick="delPhoto(' + jq(p.id) + ')">✕</span>' +
     '</div>'
-  ).join('');
+  ).join('') || '<p class="muted" style="font-size:12px;margin:0">No photos yet.</p>';
+
   return (
-    '<div style="margin-bottom:20px">' +
-      '<h4 style="margin-bottom:12px">Article Info</h4>' +
+    '<div class="ev-status">' + statusPill +
+      '<span class="muted" style="font-size:12.5px">' + (info.live ? 'Visible to customers.' : esc(info.reason || 'Not visible yet.')) + '</span></div>' +
+
+    // ── Details ──
+    '<section class="ev-card">' +
+      '<div class="ev-card-title">Details</div>' +
       '<div class="grid2">' +
         '<div class="field"><label>Article Code</label><input id="ec_' + a.id + '" value="' + esc(a.article_code) + '"></div>' +
         '<div class="field"><label>Name</label><input id="en_' + a.id + '" value="' + esc(a.name || "") + '"></div>' +
@@ -785,35 +776,70 @@ function buildEditModalHTML(a) {
         '<div class="field"><label>Base Price (' + esc(cur) + ')</label><input id="ebp_' + a.id + '" type="number" value="' + (a.base_price ?? "") + '"></div>' +
       '</div>' +
       '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
-      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
-        '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ena_' + a.id + '" ' + (a.is_new_arrival ? "checked" : "") + ' style="width:auto"> ⚡ New Arrival</label>' +
-        '<button class="btn sm" onclick="saveArticle(' + jq(a.id) + ')">Save info</button>' +
-        '<button class="btn danger sm" onclick="modalDelArticle(' + jq(a.id) + ')">Delete article</button>' +
+      '<label class="ev-check"><input type="checkbox" id="ena_' + a.id + '" ' + (a.is_new_arrival ? "checked" : "") + '> ⚡ Mark as New Arrival</label>' +
+    '</section>' +
+
+    // ── Colours & sizes ──
+    '<section class="ev-card">' +
+      '<div class="ev-card-title">Colours &amp; sizes <span class="ev-card-note">edit qty / price, then Save changes below</span></div>' +
+      '<div class="ev-list">' + vs + '</div>' +
+      '<div class="ev-add">' +
+        '<div class="ev-add-f" style="flex:1.4"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
+        '<div class="ev-add-f"><label>Size</label><input id="vs_' + a.id + '"></div>' +
+        '<div class="ev-add-f"><label>Price</label><input id="vp_' + a.id + '" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
+        '<div class="ev-add-f"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="1"></div>' +
+        '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">+ Add</button>' +
       '</div>' +
-    '</div>' +
-    '<div style="border-top:1px solid var(--line);padding-top:16px;margin-bottom:20px">' +
-      '<h4 style="margin-bottom:10px">Colours / Sizes</h4>' +
-      '<div style="margin-bottom:10px">' + vs + '</div>' +
-      '<div class="row-actions" style="align-items:flex-end;flex-wrap:wrap;gap:8px">' +
-        '<div style="min-width:110px"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
-        '<div style="min-width:78px"><label>Size</label><input id="vs_' + a.id + '"></div>' +
-        '<div style="min-width:86px"><label>Price</label><input id="vp_' + a.id + '" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
-        '<div style="min-width:68px"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="1"></div>' +
-        '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">Add</button>' +
-      '</div>' +
-    '</div>' +
-    '<div style="border-top:1px solid var(--line);padding-top:16px">' +
-      '<h4 style="margin-bottom:10px">Photos</h4>' +
+    '</section>' +
+
+    // ── Photos (auto-saved) ──
+    '<section class="ev-card">' +
+      '<div class="ev-card-title">Photos <span class="ev-card-note">added &amp; removed instantly</span></div>' +
       '<div class="thumbs">' + photos + '</div>' +
-      '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">' +
-        '<div style="min-width:130px"><label>Photo colour</label>' +
-          '<select id="pc_' + a.id + '"><option value="">— any —</option>' + colorOpts + '</select>' +
-        '</div>' +
-        '<div><label>Choose photos</label><input type="file" accept="image/*" multiple onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
+      '<div class="ev-add" style="margin-top:12px">' +
+        '<div class="ev-add-f"><label>Photo colour</label><select id="pc_' + a.id + '"><option value="">— any —</option>' + colorOpts + '</select></div>' +
+        '<div class="ev-add-f" style="flex:1.4"><label>Add photos</label><input type="file" accept="image/*" multiple onchange="uploadPhoto(' + jq(a.id) + ',this)"></div>' +
       '</div>' +
-      '<p class="muted" style="font-size:12px;margin-top:6px">Tag each photo with its colour.</p>' +
-    '</div>'
+      '<p class="muted" style="font-size:12px;margin-top:8px">Tag each photo with its colour so customers see the right image when they switch colour.</p>' +
+    '</section>'
   );
+}
+
+// Single save for the edit modal: writes the Details fields AND every colour's
+// qty/price in one action (photos are already saved on upload/delete). This is the
+// only "save" the admin needs — no more per-section buttons.
+async function saveEditModal(aid) {
+  aid = aid || EDIT_MODAL_AID;
+  if (!aid) return;
+  const body = {
+    id: aid,
+    article_code: val("ec_" + aid),
+    name: val("en_" + aid),
+    category: val("ect_" + aid),
+    base_price: val("ebp_" + aid) ? Number(val("ebp_" + aid)) : null,
+    description: (document.getElementById("edd_" + aid) || {}).value?.trim() || "",
+    is_active: 1, // visibility is driven by the per-colour Live toggle, not here
+    is_new_arrival: !!(document.getElementById("ena_" + aid) || {}).checked,
+  };
+  if (!body.article_code || !body.category) return toast("Article code and category are required");
+  const a = ARTICLES.find(x => x.id === aid) || {};
+  const updates = (a.variants || []).map(v => {
+    const qEl = document.getElementById("vq2_" + v.id), pEl = document.getElementById("vp2_" + v.id);
+    return {
+      id: v.id,
+      available_qty: qEl ? (parseInt(qEl.value) || 0) : v.available_qty,
+      price: pEl && pEl.value.trim() !== "" ? Number(pEl.value) : null,
+      is_active: v.is_active ? 1 : 0,
+    };
+  });
+  const [artRes, varRes] = await Promise.all([
+    api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    updates.length
+      ? api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ updates }) })
+      : Promise.resolve({ ok: true }),
+  ]);
+  if (artRes.ok && varRes.ok) { toast("✓ Saved"); await loadArticles(); }
+  else toast("Save failed");
 }
 async function modalDelArticle(id) {
   if (!confirm("Delete this article and all its colours/photos?")) return;
@@ -830,19 +856,6 @@ async function addVariant(aid) {
 async function delVariant(id) {
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (ok) { toast("Removed"); loadArticles(); }
-}
-async function saveVariant(vid) {
-  const qEl = document.getElementById('vq2_' + vid);
-  const pEl = document.getElementById('vp2_' + vid);
-  let isActive = 1;
-  let varRef = null;
-  for (const a of ARTICLES) { const v = a.variants.find(x => x.id === vid); if (v) { isActive = v.is_active ? 1 : 0; varRef = v; break; } }
-  const newQty = qEl ? Number(qEl.value) : 0;
-  const newPrice = pEl && pEl.value.trim() !== '' ? Number(pEl.value) : null;
-  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ updates: [{ id: vid, available_qty: newQty, price: newPrice, is_active: isActive }] }) });
-  if (ok) { toast("Saved"); if (varRef) { varRef.available_qty = newQty; varRef.price = newPrice; } }
-  else toast("Save failed");
 }
 async function uploadPhoto(aid, input) {
   const files = [...input.files]; if (!files.length) return;
@@ -1034,7 +1047,7 @@ async function uploadCatImg(category, input) {
   if (!input.files.length) return;
   const file = input.files[0];
   input.value = "";
-  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — 4:3 (used for the home tile and the category page header)", maxEdge: 1400, type: "image/jpeg", quality: 0.85, name: "category" },
+  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — used 3 ways: home tile (3:4), category banner desktop (wide 16:3) & mobile (3:2). Keep the main subject inside the dashed “safe” box so it shows on all of them.", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category", deviceCrops: [{ name: "Home tile", ratio: 3 / 4 }, { name: "Banner (desktop)", ratio: 16 / 3 }, { name: "Banner (mobile)", ratio: 3 / 2 }] },
     async (cropped) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", cropped); fd.append("category", category);

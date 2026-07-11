@@ -53,7 +53,12 @@
       "Bash(python -c \"import PIL; print\\('Pillow ready:', PIL.__version__\\)\")",
       "Bash(node --check functions/api/admin/tokens.js)",
       "Bash(node --check functions/api/admin/articles.js)",
-      "Bash(node --check public/assets/product.js)"
+      "Bash(node --check public/assets/product.js)",
+      "Bash(cat package.json)",
+      "Bash(cat wrangler.toml)",
+      "Bash(npx wrangler *)",
+      "Bash(ls .claude)",
+      "Bash(cat .claude/launch.json)"
     ]
   }
 }

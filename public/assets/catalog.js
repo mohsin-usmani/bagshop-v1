@@ -5,6 +5,7 @@ let CUR = 'Rs.';
 let SHOW_PRICES = true;
 let VIEW = 'home';       // 'home' | 'catalogue'
 let CAT_FILTER = '';     // current category in catalogue view
+let NEW_ARR = false;     // catalogue view is showing New Arrivals only
 const FILTER = { color: '', size: '', price_min: '', price_max: '', q: '' };
 let SORT = 'default';
 const CART = {};
@@ -136,6 +137,7 @@ function showExpired() {
 // ── Navigation ──
 function goHome() {
   VIEW = 'home';
+  NEW_ARR = false;
   BANNER_IDX = 0;
   closeMenu();
   closeNavSearch();
@@ -146,11 +148,26 @@ function goHome() {
 function goCategory(cat, color, size) {
   VIEW = 'catalogue';
   CAT_FILTER = cat || '';
+  NEW_ARR = false;
   FILTER.color = color || '';
   FILTER.size = size || '';
   FILTER.price_min = '';
   FILTER.price_max = '';
   FILTER.q = '';
+  SORT = 'default';
+  closeMenu();
+  closeNavSearch();
+  stopBanner();
+  window.scrollTo(0, 0);
+  renderApp();
+}
+
+// New Arrivals "View All" → catalogue page showing only new-arrival products.
+function goNewArrivals() {
+  VIEW = 'catalogue';
+  CAT_FILTER = '';
+  NEW_ARR = true;
+  FILTER.color = ''; FILTER.size = ''; FILTER.price_min = ''; FILTER.price_max = ''; FILTER.q = '';
   SORT = 'default';
   closeMenu();
   closeNavSearch();
@@ -232,6 +249,7 @@ function onSearchInput(val) {
     FILTER.q = val.trim();
     if (FILTER.q) {
       if (VIEW !== 'catalogue') { VIEW = 'catalogue'; CAT_FILTER = ''; }
+      NEW_ARR = false; // a search spans all products, not just new arrivals
       stopBanner();
       renderCataloguePage();
     } else if (VIEW === 'catalogue') {
@@ -388,7 +406,7 @@ function newArrivalsHTML() {
   return '<div class="new-arrivals-section">' +
     '<div class="new-arrivals-head">' +
       '<h2>New Arrivals</h2>' +
-      '<span class="view-all-link" onclick="goCategory(\'\')">View All →</span>' +
+      '<span class="view-all-link" onclick="goNewArrivals()">View All →</span>' +
     '</div>' +
     '<div class="na-scroll">' +
       articles.map(a => {
@@ -400,12 +418,10 @@ function newArrivalsHTML() {
           '</div>' +
           '<div class="na-info">' +
             '<div class="na-name">' + esc(a.name || a.article_code) + '</div>' +
-            '<div class="na-code">' + esc(a.article_code) + '</div>' +
+            '<div class="na-desc">' + esc(a.description || a.article_code) + '</div>' +
             (SHOW_PRICES && minPrice ? '<div class="na-price">' + esc(CUR) + ' ' + minPrice + '/pc</div>' : '') +
           '</div>' +
-          '<button class="na-atc" onclick="event.stopPropagation();quickAddToCart(\'' + jq(a.id) + '\')">' +
-            'Add to Cart' +
-          '</button>' +
+          '<button class="na-atc" onclick="event.stopPropagation();quickAddToCart(\'' + jq(a.id) + '\')">ADD TO CART</button>' +
         '</div>';
       }).join('') +
     '</div>' +
@@ -556,7 +572,13 @@ function handleBannerClick(link) {
 // on-brand coloured band) with the big category name — so opening a category from
 // the top nav looks the same as opening it from a homepage tile.
 function catHeroHTML() {
-  if (!CAT_FILTER || !DATA) return '';
+  if (!DATA) return '';
+  if (NEW_ARR) {
+    return '<div class="cat-hero cat-hero-plain">' +
+      '<div class="cat-hero-text"><div class="cat-hero-name">NEW ARRIVALS</div></div>' +
+    '</div>';
+  }
+  if (!CAT_FILTER) return '';
   const catImages = DATA.category_images || {};
   const img = catImages[CAT_FILTER];
   return '<div class="cat-hero' + (img ? '' : ' cat-hero-plain') + '">' +
@@ -571,7 +593,7 @@ function catHeroHTML() {
 function renderCataloguePage() {
   const articles = getFiltered();
   const app = document.getElementById('app');
-  const catLabel = CAT_FILTER || 'All Products';
+  const catLabel = NEW_ARR ? 'New Arrivals' : (CAT_FILTER || 'All Products');
   const filterCount = activeFilterCount();
 
   app.innerHTML =
@@ -617,6 +639,12 @@ function renderCataloguePage() {
 function getFiltered() {
   if (!DATA) return [];
   let list = DATA.articles;
+  if (NEW_ARR) {
+    // Show flagged new arrivals; if none are flagged, fall back to all (mirrors the
+    // homepage New Arrivals strip so "View All" is never unexpectedly empty).
+    const flagged = list.filter(a => a.is_new_arrival);
+    if (flagged.length) list = flagged;
+  }
   if (CAT_FILTER) list = list.filter(a => a.category === CAT_FILTER);
   if (FILTER.color) list = list.filter(a => a.variants.some(v => v.color === FILTER.color));
   if (FILTER.size)  list = list.filter(a => a.variants.some(v => v.size === FILTER.size));
@@ -832,12 +860,10 @@ function articleCard(a) {
     '<div class="photo-wrap" id="pw-' + a.id + '">' + photoWrapHTML(a) + '</div>' +
     '<div class="prod-info">' +
       '<div class="pname">' + esc(a.name || a.article_code) + '</div>' +
-      '<div class="pcode">' + esc(a.article_code) + '</div>' +
+      '<div class="pdesc">' + esc(a.description || a.article_code) + '</div>' +
       (SHOW_PRICES && minPrice ? '<div class="card-price">' + esc(CUR) + ' ' + minPrice + '/pc</div>' : '') +
     '</div>' +
-    '<button class="btn-atc" onclick="event.stopPropagation();quickAddToCart(\'' + jq(a.id) + '\')">' +
-      IC_CART + ' ADD TO CART' +
-    '</button>' +
+    '<button class="btn-atc" onclick="event.stopPropagation();quickAddToCart(\'' + jq(a.id) + '\')">ADD TO CART</button>' +
   '</div>';
 }
 

@@ -110,7 +110,7 @@
     <!-- Category images section -->
     <div style="margin-top:32px">
       <div class="hd"><h3>Category Images</h3></div>
-      <p class="muted" style="margin-bottom:16px">Set a photo for each category tile on the homepage. Square images work best.</p>
+      <p class="muted" style="margin-bottom:16px">One photo per category, shown in <strong>three shapes</strong>: the home-page <strong>tile</strong> (tall 3:4) and the category-page <strong>banner</strong> — <strong>wide 16:3 on desktop</strong>, <strong>3:2 on mobile</strong>. Upload a <strong>landscape photo (4:3 or wider, ~1600px)</strong> with the main subject <strong>centred</strong>. The crop tool shows a “safe” box — keep the subject inside it so it looks right on every screen.</p>
       <div id="catImgList"></div>
     </div>
   </div>
@@ -187,10 +187,16 @@
 <div id="editModal" style="display:none;position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.55);overflow-y:auto;padding:20px 12px" onclick="if(event.target===this)closeEditModal()">
   <div class="edit-modal">
     <div class="edit-modal-head">
-      <h3 id="editModalTitle" style="margin:0;font-size:16px">Edit Article</h3>
+      <h3 id="editModalTitle" style="margin:0;font-size:16px">Edit product</h3>
       <button onclick="closeEditModal()" style="background:none;border:none;cursor:pointer;font-size:22px;line-height:1;color:var(--muted);padding:0 4px">✕</button>
     </div>
     <div id="editModalBody" class="edit-modal-body"></div>
+    <div class="edit-modal-foot">
+      <button class="btn danger sm" onclick="modalDelArticle(EDIT_MODAL_AID)">Delete product</button>
+      <div style="flex:1"></div>
+      <button class="btn ghost sm" onclick="closeEditModal()">Cancel</button>
+      <button class="btn" onclick="saveEditModal(EDIT_MODAL_AID)">Save changes</button>
+    </div>
   </div>
 </div>
 
