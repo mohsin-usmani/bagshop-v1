@@ -1,2 +1,17 @@
 /admin.html
   Cache-Control: no-store, no-cache, must-revalidate
+/admin
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# Customer-facing HTML must always revalidate so new deploys show up
+# immediately (WhatsApp's in-app browser caches pages aggressively).
+/
+  Cache-Control: no-cache
+/product
+  Cache-Control: no-cache
+/product.html
+  Cache-Control: no-cache
+/s
+  Cache-Control: no-cache
+/s.html
+  Cache-Control: no-cache

@@ -152,7 +152,9 @@ always written as `1`. `stockLiveInfo()` (admin.js) mirrors this rule for the st
 - Table: article code, name, colour, size, price (editable), qty (editable), live toggle, Edit button
 - **Search** by code, name, or category (live filter)
 - **Sort by**: Newest first / Oldest first / A→Z / Z→A / By category
-- **Save Changes** button: bulk PATCH to `/api/admin/variants`
+- **Per-row Save**: editing a row's price or qty reveals a Save button next to the qty box
+  (`stockRowDirty`/`saveRow`) that PATCHes just that one variant. The old top-of-tab bulk
+  "Save changes" button and `saveStock()` were removed.
 - **Edit button** (✏): opens edit modal for article details, variants, photos
 
 ### Add Product (3-step wizard)
@@ -184,8 +186,11 @@ The 20s timeout in `api()` covers the worst-case cold start.
 `photos(id, article_id, color, url, sort_order)`
 `access_tokens(id, token_hash, customer_label, customer_phone, created_at, expires_at, is_revoked)`
 `orders(id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status)`
-  - `customer_phone` copied from the link at checkout so a customer's history survives the
-    7-day token purge. `items_json` stores an enriched snapshot (code/name/colour/size/qty/price).
+  - `customer_phone` copied from the link at checkout so a customer's history is preserved even
+    if the link is later revoked. `items_json` stores an enriched snapshot (code/name/colour/size/qty/price).
+  - NOTE: access_tokens are **no longer auto-purged** (the old 7-day cleanup was removed) so past
+    customers persist for the create-link autocomplete. Links still expire via `expires_at`; expiry
+    can be shifted by ± hours from the admin Customer Links tab (tokens PATCH `{id, delta_hours}`).
   - Migration for existing DBs: `ALTER TABLE orders ADD COLUMN customer_phone TEXT;`
 `banners(id, url, link, sort_order, created_at)`
 `categories(id, name, created_at)`
@@ -215,5 +220,8 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=19**, **product.html = v=19**, **s.html (catalogue) = v=23**
+  Current versions: **admin.html = v=25**, **product.html = v=21**, **s.html (catalogue) = v=24**
+  NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
+  `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
+  (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
   (bump `common.js`, `admin.js`/`catalog.js`, and `styles.css` on the page you changed).

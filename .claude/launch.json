@@ -4,7 +4,7 @@
     {
       "name": "bagshop-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "pages", "dev", "public", "--port", "8788", "--var", "DEV:1"],
+      "runtimeArgs": ["wrangler", "pages", "dev", "public", "--port", "8788", "-b", "DEV=1"],
       "port": 8788
     }
   ]

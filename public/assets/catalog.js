@@ -122,9 +122,12 @@ async function init() {
   renderNav();
   renderMobMenu();
   syncStickyOffsets();
-  // Check if URL specifies a category to open directly
-  const urlCat = qs('cat');
-  if (urlCat) { goCategory(decodeURIComponent(urlCat)); } else { goHome(); }
+  // Restore the view from the URL so returning from a product (Back button or the
+  // phone's back) lands the customer back in the category/new-arrivals they were in.
+  const urlCat = qs('cat'), urlNew = qs('new');
+  if (urlNew) goNewArrivals();
+  else if (urlCat) goCategory(urlCat, qs('color') || '', qs('size') || '');
+  else goHome();
 }
 
 function showExpired() {
@@ -141,8 +144,27 @@ function goHome() {
   BANNER_IDX = 0;
   closeMenu();
   closeNavSearch();
+  syncCatalogUrl();
   renderApp();
   window.scrollTo(0, 0);
+}
+
+// Keep the browser URL in sync with the current view. Without this, tapping a
+// category only changes JS state, so the catalogue's history entry stays at the
+// home URL — and pressing Back from a product (top Back button OR the phone's back)
+// reloads that home URL, dumping the customer on the homepage instead of the
+// category they were in. replaceState updates the URL in place (no history pile-up),
+// so Back returns to /s.html?cat=… and init() re-opens that category.
+function syncCatalogUrl() {
+  const p = new URLSearchParams();
+  if (TOKEN) p.set('t', TOKEN);
+  if (VIEW === 'catalogue') {
+    if (NEW_ARR) p.set('new', '1');
+    else if (CAT_FILTER) p.set('cat', CAT_FILTER);
+    if (FILTER.color) p.set('color', FILTER.color);
+    if (FILTER.size) p.set('size', FILTER.size);
+  }
+  try { history.replaceState(null, '', '/s.html?' + p.toString()); } catch (e) {}
 }
 
 function goCategory(cat, color, size) {
@@ -158,6 +180,7 @@ function goCategory(cat, color, size) {
   closeMenu();
   closeNavSearch();
   stopBanner();
+  syncCatalogUrl();
   window.scrollTo(0, 0);
   renderApp();
 }
@@ -172,6 +195,7 @@ function goNewArrivals() {
   closeMenu();
   closeNavSearch();
   stopBanner();
+  syncCatalogUrl();
   window.scrollTo(0, 0);
   renderApp();
 }
@@ -431,18 +455,17 @@ function newArrivalsHTML() {
 function heroHTML() {
   const banners = (DATA.banners || []).filter(b => b.is_active);
   if (!banners.length) return '<div style="height:8px"></div>';
+  // Tapping the banner opens its attached link (category/article/URL). Banners
+  // with no link are not clickable. The whole image is the tap target now — the
+  // old "Shop Now" button was removed.
   return '<div class="hero" id="hero">' +
     '<div class="hero-track" id="heroTrack">' +
       banners.map((b, i) =>
-        '<div class="hero-slide' + (i === 0 ? ' on' : '') + '" data-idx="' + i + '">' +
+        '<div class="hero-slide' + (i === 0 ? ' on' : '') + '" data-idx="' + i + '"' +
+          (b.link_url ? ' style="cursor:pointer" onclick="bannerTap()"' : '') + '>' +
           '<img src="' + esc(b.image_url) + '" alt="" ' + (i === 0 ? '' : 'loading="lazy"') + '>' +
         '</div>'
       ).join('') +
-    '</div>' +
-    '<div class="hero-cta" id="heroCta">' +
-      (banners[0] && banners[0].link_url
-        ? '<button class="hero-cta-btn" onclick="handleBannerClick(\'' + jq(banners[0].link_url) + '\')">SHOP NOW &nbsp;→</button>'
-        : '') +
     '</div>' +
     (banners.length > 1
       ? '<button class="hero-arr prev" onclick="prevBanner()">&#8249;</button>' +
@@ -536,13 +559,12 @@ function updateBannerUI() {
   slides.forEach((s, i) => s.classList.toggle('on', i === BANNER_IDX));
   const dots = document.querySelectorAll('.hero-dot');
   dots.forEach((d, i) => d.classList.toggle('on', i === BANNER_IDX));
-  const cta = document.getElementById('heroCta');
-  if (cta) {
-    const b = banners[BANNER_IDX];
-    cta.innerHTML = (b && b.link_url)
-      ? '<button class="hero-cta-btn" onclick="handleBannerClick(\'' + jq(b.link_url) + '\')">SHOP NOW &nbsp;→</button>'
-      : '';
-  }
+}
+// Tap anywhere on the banner → open its attached link. No link → do nothing.
+function bannerTap() {
+  const banners = (DATA.banners || []).filter(b => b.is_active);
+  const b = banners[BANNER_IDX];
+  if (b && b.link_url) handleBannerClick(b.link_url);
 }
 function initBannerSwipe() {
   const hero = document.getElementById('hero');
@@ -1185,12 +1207,118 @@ function renderCart() {
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
   let total = 0;
   document.getElementById('cartLines').innerHTML = ids.map((id) => {
-    const c = CART[id]; total += (c.price || 0) * c.qty;
-    return '<div class="line"><div style="flex:1">' + esc(c.label) + ' <span class="muted">× ' + c.qty + '</span></div>' +
-      (SHOW_PRICES ? '<div class="muted">' + esc(CUR) + (c.price * c.qty) + '</div>' : '') +
-      '<span class="x" onclick="removeItem(\'' + jq(id) + '\')">✕</span></div>';
+    total += (CART[id].price || 0) * CART[id].qty;
+    return cartLineHTML(id, CART[id]);
   }).join('') || '<p class="muted">Cart is empty.</p>';
   document.getElementById('cartTotal').innerHTML = SHOW_PRICES && ids.length ? 'Est. total: <strong>' + esc(CUR) + total + '</strong>' : '';
+}
+
+// Look up the article + variant behind a cart line (cart is keyed by variant id).
+function cartVariant(id) {
+  if (!DATA) return null;
+  for (const a of DATA.articles) {
+    const v = (a.variants || []).find(x => x.id === id);
+    if (v) return { a, v };
+  }
+  return null;
+}
+
+function cartLineHTML(id, c) {
+  const jid = jq(id);
+  const cv = cartVariant(id);
+  // Variant no longer in the catalogue → minimal fallback line.
+  if (!cv) {
+    return '<div class="citem"><div class="citem-body"><div class="citem-top">' +
+      '<div class="citem-name">' + esc(c.label || 'Item') + ' <span class="muted">× ' + c.qty + '</span></div>' +
+      '<button class="citem-x" onclick="removeItem(\'' + jid + '\')">✕</button>' +
+    '</div></div></div>';
+  }
+  const a = cv.a, v = cv.v;
+  const img = resolvePhotos(a, v.color)[0].url;
+  const colours = [...new Set(a.variants.map(x => x.color).filter(Boolean))];
+  const sizesForColour = a.variants.filter(x => x.color === v.color && x.size && x.size.trim());
+  const lineTotal = (c.price || 0) * c.qty;
+
+  const colourSel = colours.length > 1
+    ? '<label>Colour<select onchange="changeCartColour(\'' + jid + '\', this.value)">' +
+        colours.map(col => '<option' + (col === v.color ? ' selected' : '') + '>' + esc(col) + '</option>').join('') +
+      '</select></label>'
+    : (v.color ? '<label>Colour<select disabled><option>' + esc(v.color) + '</option></select></label>' : '');
+
+  const sizeSel = sizesForColour.length
+    ? '<label>Size<select onchange="changeCartSize(\'' + jid + '\', this.value)">' +
+        sizesForColour.map(sv => '<option' + (sv.size === v.size ? ' selected' : '') + (sv.available_qty <= 0 ? ' disabled' : '') + '>' + esc(sv.size) + '</option>').join('') +
+      '</select></label>'
+    : '';
+
+  return '<div class="citem">' +
+    '<div class="citem-img" onclick="openCartProduct(\'' + jid + '\')"><img src="' + esc(img) + '" alt=""></div>' +
+    '<div class="citem-body">' +
+      '<div class="citem-top">' +
+        '<div class="citem-name" onclick="openCartProduct(\'' + jid + '\')">' + esc(a.name || a.article_code) + '</div>' +
+        '<button class="citem-x" title="Remove" onclick="removeItem(\'' + jid + '\')">✕</button>' +
+      '</div>' +
+      '<div class="citem-opts">' + colourSel + sizeSel + '</div>' +
+      '<div class="citem-bottom">' +
+        '<div class="citem-stepper">' +
+          '<button onclick="cartQtyDelta(\'' + jid + '\',-1)">−</button>' +
+          '<span>' + c.qty + '</span>' +
+          '<button onclick="cartQtyDelta(\'' + jid + '\',1)">+</button>' +
+        '</div>' +
+        (SHOW_PRICES ? '<div class="citem-price">' + esc(CUR) + ' ' + lineTotal + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function cartQtyDelta(id, d) {
+  if (!CART[id]) return;
+  const cv = cartVariant(id);
+  const max = cv ? (cv.v.available_qty || 1) : CART[id].qty;
+  let q = (CART[id].qty || 1) + d;
+  if (q < 1) q = 1;
+  if (q > max) { q = max; toast('Only ' + max + ' in stock'); }
+  CART[id].qty = q;
+  saveCartToStorage();
+  renderCart();
+}
+
+// Move a cart line to a different variant of the SAME article (colour/size change),
+// carrying the quantity over (capped at the new variant's stock, merged if already in cart).
+function moveCartVariant(oldId, nv, a) {
+  if (!nv || nv.id === oldId) return;
+  const oldQty = (CART[oldId] && CART[oldId].qty) || 1;
+  const price = nv.price != null ? nv.price : a.base_price;
+  const label = a.article_code + ' ' + nv.color + (nv.size ? ' ' + nv.size : '');
+  const want = Math.min(oldQty, nv.available_qty || 1) || 1;
+  if (CART[nv.id]) CART[nv.id].qty = Math.min(CART[nv.id].qty + want, nv.available_qty || want);
+  else CART[nv.id] = { qty: want, label, price };
+  delete CART[oldId];
+  saveCartToStorage();
+  renderCart();
+}
+
+function changeCartColour(id, colour) {
+  const cv = cartVariant(id); if (!cv) return;
+  const colVars = cv.a.variants.filter(x => x.color === colour);
+  const nv = colVars.find(x => x.size === cv.v.size && x.available_qty > 0)
+    || colVars.find(x => x.available_qty > 0) || colVars[0];
+  if (!nv) return toast('That colour is unavailable');
+  moveCartVariant(id, nv, cv.a);
+}
+
+function changeCartSize(id, size) {
+  const cv = cartVariant(id); if (!cv) return;
+  const nv = cv.a.variants.find(x => x.color === cv.v.color && x.size === size);
+  if (!nv) return;
+  if (nv.available_qty <= 0) return toast('That size is sold out');
+  moveCartVariant(id, nv, cv.a);
+}
+
+function openCartProduct(id) {
+  const cv = cartVariant(id); if (!cv) return;
+  closeCart();
+  openDetail(cv.a.id);
 }
 
 function removeItem(id) {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FinEx Admin</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%233b4cca'/%3E%3Ctext x='50' y='69' text-anchor='middle' fill='white' font-family='Arial%2Csans-serif' font-weight='700' font-style='italic' font-size='50'%3EFx%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="/assets/styles.css?v=19">
+<link rel="stylesheet" href="/assets/styles.css?v=25">
 </head>
 <body>
 
@@ -34,7 +34,7 @@
 
   <!-- STOCK -->
   <div class="panel on" id="p-stock">
-    <div class="hd"><h3>Stock</h3><button class="btn" onclick="saveStock()">Save changes</button></div>
+    <div class="hd"><h3>Stock</h3></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
       <div style="position:relative;flex:1">
         <input id="stockSearch" placeholder="Search by code, name or category…" oninput="renderStock()" autocomplete="off"
@@ -120,15 +120,15 @@
     <h3>Give a customer access</h3>
     <div class="card artcard">
       <div class="grid2">
-        <div class="field"><label>Customer name / shop</label><input id="lk_label" placeholder="Rahul Bags"></div>
-        <div class="field"><label>WhatsApp number (with country code)</label><input id="lk_phone" placeholder="9198xxxxxx12"></div>
+        <div class="field" style="position:relative"><label>Customer name / shop</label><input id="lk_label" autocomplete="off" placeholder="Rahul Bags" oninput="acFilter('label')"><div class="ac-drop" id="lk_label_ac"></div></div>
+        <div class="field" style="position:relative"><label>WhatsApp number (10-digit mobile — +91 added automatically)</label><input id="lk_phone" autocomplete="off" inputmode="numeric" placeholder="9812345678" oninput="acFilter('phone')"><div class="ac-drop" id="lk_phone_ac"></div></div>
       </div>
       <div class="field" style="max-width:220px"><label>Valid for (hours)</label><input id="lk_hours" type="number" value="4"></div>
       <button class="btn" onclick="createLink()">Create link</button>
     </div>
     <div id="linkResult"></div>
     <h3 style="margin-top:18px">Active &amp; recent links</h3>
-    <p class="muted" style="margin-top:0;margin-bottom:12px;font-size:13px">Links are removed automatically 7 days after they're created.</p>
+    <p class="muted" style="margin-top:0;margin-bottom:12px;font-size:13px">For an active link, use + / − to change its validity by hours, then press Save. Past customers are remembered for autofill above.</p>
     <div id="linkList"></div>
   </div>
 
@@ -200,7 +200,7 @@
   </div>
 </div>
 
-<script src="/assets/common.js?v=19"></script>
-<script src="/assets/admin.js?v=19"></script>
+<script src="/assets/common.js?v=25"></script>
+<script src="/assets/admin.js?v=25"></script>
 </body>
 </html>

@@ -22,6 +22,8 @@
   --success: #008827;
   --amber:   #C8960C;
   --navy:    #003366;
+  --cart:    #171717;  /* cart accent — charcoal/black, matches the PDP "Add to cart" */
+  --cart-hover: #000000;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'GT-America','Gotham','HelveticaNeue','Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;letter-spacing:.01em}
@@ -41,7 +43,7 @@ img{display:block;max-width:100%}
 .nav-shopname{display:none}
 .nav-icon-btn{background:none;border:none;cursor:pointer;padding:8px;color:var(--text);display:flex;align-items:center;justify-content:center;border-radius:0;position:relative}
 .nav-icon-btn:hover{background:var(--bg2)}
-.nav-cart-badge{position:absolute;top:2px;right:2px;background:var(--brand);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.nav-cart-badge{position:absolute;top:2px;right:2px;background:var(--cart);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .nav-ham-btn{background:none;border:none;cursor:pointer;padding:8px;display:flex;flex-direction:column;gap:5px;border-radius:0}
 .nav-ham-btn span{display:block;width:22px;height:2px;background:var(--text);transition:all .2s}
 .nav-ham-btn:hover span{background:#444}
@@ -418,16 +420,36 @@ img{display:block;max-width:100%}
 .modal-section-label{font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px}
 
 /* ── CART ── */
-.cartbar{position:fixed;bottom:0;left:0;right:0;background:var(--brand);color:#fff;z-index:130;box-shadow:0 -2px 12px rgba(0,0,0,.2)}
+.cartbar{position:fixed;bottom:0;left:0;right:0;background:var(--cart);color:#fff;z-index:130;box-shadow:0 -2px 12px rgba(0,0,0,.2)}
 .cartbar-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:10px}
 .cartbar-left{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
-.btn-cart-view{background:#fff;color:var(--brand);border:none;font:inherit;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:11px 20px;cursor:pointer;white-space:nowrap}
+.btn-cart-view{background:#fff;color:var(--cart);border:none;font:inherit;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:11px 20px;cursor:pointer;white-space:nowrap}
 .btn-cart-view:hover{background:#f0f0f0}
 .line{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:10px 0;font-size:13px}
 .line .x{margin-left:auto;color:var(--danger);cursor:pointer;font-weight:700;font-size:16px;line-height:1}
 .cart-total-row{text-align:center;margin:12px 0;font-weight:700;font-size:15px}
-.btn-send-order{width:100%;background:var(--brand);color:#fff;border:none;font:inherit;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:16px;cursor:pointer;margin-top:4px}
-.btn-send-order:hover{background:#0090c9}
+.btn-send-order{width:100%;background:var(--cart);color:#fff;border:none;font:inherit;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:16px;cursor:pointer;margin-top:4px}
+.btn-send-order:hover{background:var(--cart-hover)}
+
+/* ── Rich cart line items (image, qty stepper, colour/size selectors) ── */
+.citem{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.citem-img{width:74px;height:74px;flex-shrink:0;background:var(--bg2);border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer}
+.citem-img img{width:100%;height:100%;object-fit:cover;display:block}
+.citem-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.citem-top{display:flex;align-items:flex-start;gap:8px}
+.citem-name{flex:1;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;line-height:1.3}
+.citem-name:hover{text-decoration:underline;text-underline-offset:2px}
+.citem-x{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1;padding:2px;flex-shrink:0}
+.citem-x:hover{color:var(--danger)}
+.citem-opts{display:flex;gap:8px;flex-wrap:wrap}
+.citem-opts label{display:inline-flex;flex-direction:column;gap:3px;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.citem-opts select{font-family:inherit;font-size:13px;font-weight:500;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--bg);cursor:pointer}
+.citem-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.citem-stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.citem-stepper button{width:32px;height:32px;border:none;background:var(--bg2);font-size:18px;font-weight:700;cursor:pointer;color:var(--text);font-family:inherit;display:flex;align-items:center;justify-content:center}
+.citem-stepper button:hover{background:var(--line)}
+.citem-stepper span{min-width:36px;text-align:center;font-size:14px;font-weight:700}
+.citem-price{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap}
 
 /* ── ADMIN ── */
 .wrap{max-width:1000px;margin:0 auto;padding:16px}
@@ -476,6 +498,19 @@ td input{padding:6px 8px}
 .tag{display:inline-block;background:var(--bg2);padding:2px 8px;font-size:12px;font-weight:700;color:var(--muted)}
 .expired{color:var(--danger);font-weight:700}
 .live{color:var(--success);font-weight:700}
+
+/* Create-link customer autocomplete (dialer-style) */
+.ac-drop{position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--bg);border:1px solid var(--line);box-shadow:0 8px 20px rgba(0,0,0,.14);max-height:240px;overflow-y:auto;display:none}
+.ac-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
+.ac-item:last-child{border-bottom:0}
+.ac-item:hover{background:var(--bg2)}
+.ac-item strong{font-weight:700;color:var(--text)}
+.ac-item span{color:var(--muted);white-space:nowrap}
+
+/* Adjust an active link's expiry by hours */
+.hours-adj{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hours-adj .stepper button{width:32px;height:32px;font-size:18px}
+.hours-adj .stepper input{width:38px;font-size:13px}
 .artcard{padding:14px;margin-bottom:12px}
 .thumbs{display:flex;gap:6px;flex-wrap:wrap}
 .thumbs .t{width:56px;height:56px;overflow:hidden;position:relative;background:var(--bg2)}
@@ -571,6 +606,42 @@ td input{padding:6px 8px}
 .ev-add-f{flex:1;min-width:78px}
 .ev-add-f label{white-space:nowrap}
 
+/* ── Variant chips (wizard) + editable rows (edit modal) + inline add form ── */
+.vchips{display:flex;flex-direction:column;gap:8px}
+.vchip{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.vchip-sw{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.18);flex-shrink:0}
+.vchip-color{font-size:13px;font-weight:700;color:var(--text)}
+.vchip-size{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--bg2);border:1px solid var(--line);color:var(--text)}
+.vchip-price{font-size:13px;font-weight:700;color:var(--brand)}
+.vchip-qty{font-size:11px;font-weight:700;color:var(--muted);margin-left:auto;background:var(--bg2);padding:3px 9px;border-radius:20px}
+.vchip-x{border:none;background:none;color:var(--danger);cursor:pointer;font-size:15px;font-weight:700;line-height:1;padding:2px 4px;flex-shrink:0}
+.vchip-x:hover{color:#a00}
+
+/* edit-modal rows: keep qty/price editable but give them a card look + swatch */
+.ev-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.ev-row{align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.ev-row:last-child{border-bottom:1px solid var(--line)}
+.ev-sw{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.18);flex-shrink:0}
+.ev-vlabel{display:flex;align-items:center;gap:8px;padding-bottom:0}
+.ev-size{font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;background:var(--bg2);border:1px solid var(--line)}
+
+/* inline-expand add form (both places) */
+.vadd{margin-top:4px}
+.vadd-btn{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1.5px dashed var(--line);color:var(--brand);font-family:inherit;font-size:13px;font-weight:700;padding:11px 18px;border-radius:8px;cursor:pointer;transition:all .15s}
+.vadd-btn:hover{border-color:var(--brand);background:#eef7fb}
+.vadd-form{display:none;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}
+.vadd-fields{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.vadd-f{flex:1;min-width:100px}
+.vadd-f.vadd-f-qty{flex:0 0 auto;max-width:88px}
+.vadd-f label{display:block;white-space:nowrap}
+.vadd-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* Stock tab: per-row Save button next to the qty box */
+.qty-cell{display:flex;align-items:center;gap:8px}
+.row-save{display:inline-flex;align-items:center;background:var(--brand);color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:700;padding:7px 13px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.row-save:hover{filter:brightness(.94)}
+.row-save:disabled{opacity:.6;cursor:default}
+
 /* ── TABLE SCROLL WRAPPER (keeps wide admin tables from breaking layout) ── */
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tbl-wrap table{border:none}
@@ -662,8 +733,9 @@ td input{padding:6px 8px}
 .pdp-info{padding:24px 20px 32px;border-left:1px solid var(--line)}
 @media(max-width:639px){.pdp-info{border-left:none;border-top:1px solid var(--line)}}
 .pdp-brand-tag{font-size:11px;font-weight:700;color:var(--brand);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
-.pdp-title{font-size:26px;font-weight:900;color:var(--text);text-transform:uppercase;line-height:1.15;letter-spacing:-.3px;margin-bottom:4px}
-@media(min-width:640px){.pdp-title{font-size:34px}}
+/* Samsonite PDP scale: GT-America 700, ~27px, normal tracking */
+.pdp-title{font-size:23px;font-weight:700;color:#000;text-transform:uppercase;line-height:1.2;letter-spacing:normal;margin-bottom:4px}
+@media(min-width:640px){.pdp-title{font-size:27px}}
 .pdp-sub{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:16px}
 .pdp-stock-row{display:flex;align-items:center;gap:6px;margin-bottom:16px}
 .pdp-stock-dot{width:9px;height:9px;border-radius:50%;background:var(--success);flex-shrink:0}
@@ -671,7 +743,8 @@ td input{padding:6px 8px}
 .pdp-stock-text{font-size:13px;font-weight:700;color:var(--success)}
 .pdp-stock-text.out{color:var(--danger)}
 .pdp-price-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-.pdp-price{font-size:34px;font-weight:700;color:var(--text);margin-bottom:16px;line-height:1}
+/* Samsonite price: GT-America Medium 500, 25px, pure black */
+.pdp-price{font-size:25px;font-weight:500;color:#000;margin-bottom:16px;line-height:1.2}
 .pdp-divider{height:1px;background:var(--line);margin:18px 0}
 .pdp-col-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px}
 .pdp-col-label strong{color:var(--text);font-weight:700;text-transform:none;letter-spacing:.2px}

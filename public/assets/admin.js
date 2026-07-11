@@ -7,6 +7,36 @@ let WIZARD_AID = null;
 let EDIT_MODAL_AID = null;
 let AUTH_FAIL_FIRED = false; // guard: only run authFail logic once
 
+// Colour-name → swatch hex, for the variant chips in the wizard & edit modal.
+const ADMIN_COLOR_CSS = {
+  black:'#1C1C1C',brown:'#7B4B2A',red:'#CC2200',beige:'#D4B896',navy:'#1B2A6B',
+  'navy blue':'#1B2A6B',cream:'#F0E6CC',green:'#2E7D32',pink:'#E91E63',white:'#EBEBEB',
+  grey:'#757575',gray:'#757575',blue:'#1565C0','sky blue':'#5B9BD5','light blue':'#7EC8E3',
+  'dark blue':'#0D1B4B',olive:'#6D7B2C',tan:'#C8965C',burgundy:'#7B1A2A',maroon:'#7B1A2A',
+  gold:'#C9962E',purple:'#6A1B9A',silver:'#C0C0C0',teal:'#008080',coral:'#FF6B6B',
+  orange:'#FF8C00',yellow:'#FFD700',mustard:'#D4A017',khaki:'#C3B091',
+};
+function colorHex(name) {
+  if (!name) return '#ccc';
+  return ADMIN_COLOR_CSS[String(name).trim().toLowerCase()] || '#ccc';
+}
+
+// Phone helpers — the admin enters a 10-digit mobile; we add the 91 country code
+// automatically (wa.me and storage need it). Robust to numbers pasted with 91/0.
+function normalizePhone(raw) {
+  let d = String(raw == null ? "" : raw).replace(/\D/g, "");
+  if (d.length === 11 && d[0] === "0") d = d.slice(1); // 0XXXXXXXXXX → XXXXXXXXXX
+  if (d.length === 10) d = "91" + d;                    // add India country code
+  return d;
+}
+// Full stored number → the 10-digit local part, for showing in the 10-digit input.
+function phoneTo10(full) {
+  const d = String(full == null ? "" : full).replace(/\D/g, "");
+  if (d.length === 12 && d.slice(0, 2) === "91") return d.slice(2);
+  if (d.length === 11 && d[0] === "0") return d.slice(1);
+  return d;
+}
+
 // Any api() call that hits a CF Access redirect fires this event.
 window.addEventListener("apiauthfail", e => authFail(e.detail));
 
@@ -27,7 +57,7 @@ async function loadAll() {
     return;
   }
   if (AUTH_FAIL_FIRED) return; // auth failed inside one of the loaders
-  loadLinks(); loadOrders(); loadBanners(); loadCategories();
+  loadLinks(); loadCustomerSuggestions(); loadOrders(); loadBanners(); loadCategories();
 }
 
 // ---- settings ----
@@ -346,8 +376,8 @@ function renderStock() {
         '<td class="art-var-indent"></td>' +
         '<td>' + esc(v.color || "") + '</td>' +
         '<td>' + esc(v.size || "") + '</td>' +
-        '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '"></td>' +
-        '<td><input class="qtybox qty-in" type="number" value="' + v.available_qty + '"></td>' +
+        '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" data-orig="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '" oninput="stockRowDirty(this)"></td>' +
+        '<td><div class="qty-cell"><input class="qtybox qty-in" type="number" value="' + v.available_qty + '" data-orig="' + v.available_qty + '" oninput="stockRowDirty(this)"><button class="row-save" style="display:none" onclick="saveRow(this)">Save</button></div></td>' +
         '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' onchange="toggleStockLive(this)" style="width:auto"></td>' +
         '<td></td>' +
       '</tr>'
@@ -370,15 +400,32 @@ function toggleArtGroup(head) {
   });
 }
 
-async function saveStock() {
-  const updates = [...document.querySelectorAll("#stockTable tr[data-id]")].map((tr) => ({
-    id: tr.dataset.id,
-    available_qty: tr.querySelector(".qty-in").value,
-    price: tr.querySelector(".price-in").value,
-    is_active: tr.querySelector(".act-in").checked,
-  }));
-  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ updates }) });
-  if (ok) { toast("Stock saved (" + updates.length + " rows)"); loadArticles(); } else toast("Save failed");
+// Per-row editing: a Save button appears on a row only when its price or qty
+// differs from what was loaded, and saves just that one variant on tap.
+function stockRowDirty(inp) {
+  const tr = inp.closest("tr[data-id]"); if (!tr) return;
+  const pEl = tr.querySelector(".price-in"), qEl = tr.querySelector(".qty-in"), btn = tr.querySelector(".row-save");
+  if (!btn) return;
+  const changed = (pEl.value !== (pEl.dataset.orig || "")) || (qEl.value !== (qEl.dataset.orig || ""));
+  btn.style.display = changed ? "inline-flex" : "none";
+}
+async function saveRow(btn) {
+  const tr = btn.closest("tr[data-id]"); if (!tr) return;
+  const id = tr.dataset.id, aid = tr.dataset.aid;
+  const pEl = tr.querySelector(".price-in"), qEl = tr.querySelector(".qty-in"), aEl = tr.querySelector(".act-in");
+  const price = pEl.value.trim() !== "" ? Number(pEl.value) : null;
+  const qty = parseInt(qEl.value) || 0;
+  btn.disabled = true;
+  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ updates: [{ id, available_qty: qty, price, is_active: aEl.checked }] }) });
+  btn.disabled = false;
+  if (!ok) return toast("Save failed");
+  // Update the local model + reset the dirty baseline so the button hides.
+  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === id); if (v) { v.available_qty = qty; v.price = price; break; } }
+  pEl.dataset.orig = pEl.value; qEl.dataset.orig = qEl.value;
+  btn.style.display = "none";
+  refreshArticleLive(aid); // qty 0 ↔ >0 can flip the Live badge
+  toast("✓ Saved");
 }
 
 // The "Live" checkbox acts like a real switch: it saves that one colour immediately
@@ -548,13 +595,21 @@ function renderWizardStep2() {
           '<input type="checkbox" id="wz2_na" ' + (a.is_new_arrival ? "checked" : "") + ' onchange="wzToggleNewArrival()" style="width:auto"> ⚡ New Arrival' +
         '</label>' +
       '</div>' +
-      '<div id="wzVariantList" style="margin-bottom:16px"></div>' +
-      '<div class="row-actions" style="align-items:flex-end;flex-wrap:wrap;gap:8px">' +
-        '<div style="min-width:110px"><label>Colour</label><input id="wz2_vc" list="wzColors" autocomplete="off"><datalist id="wzColors">' + colorOpts + '</datalist></div>' +
-        '<div style="min-width:78px"><label>Size</label><input id="wz2_vs"></div>' +
-        '<div style="min-width:86px"><label>Price</label><input id="wz2_vp" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
-        '<div style="min-width:68px"><label>Qty</label><input id="wz2_vq" type="number" value="1"></div>' +
-        '<button class="btn sm" onclick="wzAddVariant()" style="align-self:flex-end">+ Add</button>' +
+      '<div id="wzVariantList" style="margin-bottom:14px"></div>' +
+      '<div class="vadd">' +
+        '<button type="button" class="vadd-btn" id="wzAddBtn" onclick="wzShowAddForm()">+ Add colour / size</button>' +
+        '<div class="vadd-form" id="wzAddForm">' +
+          '<div class="vadd-fields">' +
+            '<div class="vadd-f"><label>Colour</label><input id="wz2_vc" list="wzColors" autocomplete="off"><datalist id="wzColors">' + colorOpts + '</datalist></div>' +
+            '<div class="vadd-f"><label>Size</label><input id="wz2_vs"></div>' +
+            '<div class="vadd-f"><label>Price</label><input id="wz2_vp" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
+            '<div class="vadd-f vadd-f-qty"><label>Qty</label><input id="wz2_vq" type="number" value="1"></div>' +
+          '</div>' +
+          '<div class="vadd-actions">' +
+            '<button type="button" class="btn ghost sm" id="wzAddCancel" onclick="wzHideAddForm()">Cancel</button>' +
+            '<button type="button" class="btn sm" onclick="wzAddVariant()">+ Add</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
       '<div class="row-actions" style="justify-content:space-between;margin-top:16px;gap:8px;flex-wrap:wrap">' +
         '<button class="btn ghost sm" onclick="renderWizardStep1()">← Back</button>' +
@@ -572,17 +627,42 @@ function renderWizardVariantList() {
   const a = ARTICLES.find(x => x.id === WIZARD_AID);
   const vs = (a && a.variants) || [];
   const cur = SETTINGS.currency || "Rs.";
-  if (!vs.length) { el.innerHTML = '<p class="muted" style="font-size:13px">No colours/sizes added yet.</p>'; return; }
-  el.innerHTML = vs.map(v =>
-    '<div class="line">' +
-      '<span style="flex:1;font-size:13px">' +
-        esc(v.color || "—") + (v.size ? ' · ' + esc(v.size) : '') +
-        ' · ' + esc(cur) + (v.price != null ? v.price : (a.base_price ?? '?')) +
-        ' · Qty: ' + v.available_qty +
-      '</span>' +
-      '<button class="btn sm ghost" style="padding:4px 8px;flex-shrink:0" onclick="wzDelVariant(' + jq(v.id) + ')">✕</button>' +
-    '</div>'
-  ).join("");
+  if (!vs.length) {
+    el.innerHTML = '<p class="muted" style="font-size:13px">No colours/sizes added yet — add the first one below.</p>';
+    wzSyncAddArea(false);
+    return;
+  }
+  el.innerHTML = '<div class="vchips">' + vs.map(v => {
+    const price = v.price != null ? v.price : (a.base_price ?? '?');
+    return '<div class="vchip">' +
+      '<span class="vchip-sw" style="background:' + colorHex(v.color) + '"></span>' +
+      '<span class="vchip-color">' + esc(v.color || "—") + '</span>' +
+      (v.size ? '<span class="vchip-size">' + esc(v.size) + '</span>' : '') +
+      '<span class="vchip-price">' + esc(cur) + ' ' + price + '</span>' +
+      '<span class="vchip-qty">Qty ' + v.available_qty + '</span>' +
+      '<button class="vchip-x" title="Remove" onclick="wzDelVariant(' + jq(v.id) + ')">✕</button>' +
+    '</div>';
+  }).join("") + '</div>';
+  wzSyncAddArea(true);
+}
+// Show fields inline for the first variant; collapse to an "Add" button afterwards.
+function wzSyncAddArea(hasVariants) {
+  const btn = document.getElementById("wzAddBtn"), form = document.getElementById("wzAddForm"), cancel = document.getElementById("wzAddCancel");
+  if (!btn || !form) return;
+  if (hasVariants) { btn.style.display = "inline-flex"; form.style.display = "none"; if (cancel) cancel.style.display = "inline-flex"; }
+  else { btn.style.display = "none"; form.style.display = "flex"; if (cancel) cancel.style.display = "none"; }
+}
+function wzShowAddForm() {
+  const btn = document.getElementById("wzAddBtn"), form = document.getElementById("wzAddForm"), cancel = document.getElementById("wzAddCancel");
+  if (btn) btn.style.display = "none";
+  if (form) form.style.display = "flex";
+  if (cancel) cancel.style.display = "inline-flex";
+  const vc = document.getElementById("wz2_vc"); if (vc) vc.focus();
+}
+function wzHideAddForm() {
+  ["wz2_vc","wz2_vs","wz2_vp"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+  const q = document.getElementById("wz2_vq"); if (q) q.value = "1";
+  wzSyncAddArea(true);
 }
 async function wzAddVariant() {
   if (!WIZARD_AID) return;
@@ -746,14 +826,16 @@ function buildEditModalHTML(a) {
   const info = stockLiveInfo(a);
   const statusPill = info.live ? '<span class="live-badge">● Live</span>' : '<span class="notlive-badge">Not live</span>';
 
+  const hasV = a.variants.length > 0;
   const vs = a.variants.map(v =>
     '<div class="ev-row">' +
-      '<div class="ev-vlabel">' + esc(v.color || '—') + ' · ' + esc(v.size || '—') + '</div>' +
+      '<span class="ev-sw" style="background:' + colorHex(v.color) + '"></span>' +
+      '<div class="ev-vlabel"><strong>' + esc(v.color || '—') + '</strong>' + (v.size ? '<span class="ev-size">' + esc(v.size) + '</span>' : '') + '</div>' +
       '<label class="ev-mini">Qty<input type="number" id="vq2_' + v.id + '" value="' + v.available_qty + '"></label>' +
       '<label class="ev-mini">Price<input type="number" id="vp2_' + v.id + '" value="' + (v.price != null ? v.price : '') + '" placeholder="' + (a.base_price ?? '') + '"></label>' +
       '<button class="ev-del" title="Remove this colour / size" onclick="delVariant(' + jq(v.id) + ')">✕</button>' +
     '</div>'
-  ).join('') || '<p class="muted" style="font-size:13px">No colours or sizes yet — add one below.</p>';
+  ).join('') || '<p class="muted" style="font-size:13px">No colours or sizes yet — add the first one below.</p>';
 
   const photos = (a.photos || []).map(p =>
     '<div class="t"><img src="' + esc(p.url) + '">' +
@@ -783,12 +865,20 @@ function buildEditModalHTML(a) {
     '<section class="ev-card">' +
       '<div class="ev-card-title">Colours &amp; sizes <span class="ev-card-note">edit qty / price, then Save changes below</span></div>' +
       '<div class="ev-list">' + vs + '</div>' +
-      '<div class="ev-add">' +
-        '<div class="ev-add-f" style="flex:1.4"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
-        '<div class="ev-add-f"><label>Size</label><input id="vs_' + a.id + '"></div>' +
-        '<div class="ev-add-f"><label>Price</label><input id="vp_' + a.id + '" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
-        '<div class="ev-add-f"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="1"></div>' +
-        '<button class="btn sm" onclick="addVariant(' + jq(a.id) + ')">+ Add</button>' +
+      '<div class="vadd">' +
+        '<button type="button" class="vadd-btn" id="emAddBtn_' + a.id + '" style="display:' + (hasV ? 'inline-flex' : 'none') + '" onclick="emShowAddForm(' + jq(a.id) + ')">+ Add colour / size</button>' +
+        '<div class="vadd-form" id="emAddForm_' + a.id + '" style="display:' + (hasV ? 'none' : 'flex') + '">' +
+          '<div class="vadd-fields">' +
+            '<div class="vadd-f"><label>Colour</label><input id="vc_' + a.id + '" list="artColors_' + a.id + '"><datalist id="artColors_' + a.id + '">' + colorOpts + '</datalist></div>' +
+            '<div class="vadd-f"><label>Size</label><input id="vs_' + a.id + '"></div>' +
+            '<div class="vadd-f"><label>Price</label><input id="vp_' + a.id + '" type="number" placeholder="' + (a.base_price != null ? a.base_price : "Price") + '"></div>' +
+            '<div class="vadd-f vadd-f-qty"><label>Qty</label><input id="vq_' + a.id + '" type="number" value="1"></div>' +
+          '</div>' +
+          '<div class="vadd-actions">' +
+            '<button type="button" class="btn ghost sm" id="emAddCancel_' + a.id + '" style="display:' + (hasV ? 'inline-flex' : 'none') + '" onclick="emHideAddForm(' + jq(a.id) + ')">Cancel</button>' +
+            '<button type="button" class="btn sm" onclick="addVariant(' + jq(a.id) + ')">+ Add</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</section>' +
 
@@ -851,7 +941,22 @@ async function addVariant(aid) {
     price: val("vp_" + aid) ? Number(val("vp_" + aid)) : null, qty: val("vq_" + aid) || 0 };
   if (!body.color && !body.size) return toast("Add a colour or size");
   const { ok } = await api("/api/admin/variants", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (ok) { toast("Added"); loadArticles(); }
+  if (ok) { toast("Added"); loadArticles(); } // refreshEditModal() collapses the form back to the button
+}
+// Inline-expand add form inside the (already-modal) edit screen — avoids a nested popup.
+function emShowAddForm(aid) {
+  const btn = document.getElementById("emAddBtn_" + aid), form = document.getElementById("emAddForm_" + aid), cancel = document.getElementById("emAddCancel_" + aid);
+  if (btn) btn.style.display = "none";
+  if (form) form.style.display = "flex";
+  if (cancel) cancel.style.display = "inline-flex";
+  const vc = document.getElementById("vc_" + aid); if (vc) vc.focus();
+}
+function emHideAddForm(aid) {
+  ["vc_","vs_","vp_"].forEach(p => { const e = document.getElementById(p + aid); if (e) e.value = ""; });
+  const q = document.getElementById("vq_" + aid); if (q) q.value = "1";
+  const btn = document.getElementById("emAddBtn_" + aid), form = document.getElementById("emAddForm_" + aid);
+  if (btn) btn.style.display = "inline-flex";
+  if (form) form.style.display = "none";
 }
 async function delVariant(id) {
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(id), { method: "DELETE" });
@@ -877,10 +982,11 @@ async function delPhoto(id) {
 
 // ---- links ----
 async function createLink() {
-  const body = { label: lk_label.value.trim(), phone: lk_phone.value.trim(), hours: lk_hours.value };
+  const phone = normalizePhone(lk_phone.value); // 10-digit input → 91XXXXXXXXXX
+  const body = { label: lk_label.value.trim(), phone, hours: lk_hours.value };
   const { ok, data } = await api("/api/admin/tokens", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!ok || !data.link) return toast("Failed");
-  const wa = body.phone ? "https://wa.me/" + body.phone.replace(/[^0-9]/g, "") + "?text=" +
+  const wa = phone ? "https://wa.me/" + phone + "?text=" +
     encodeURIComponent("Here is your catalogue (valid a few hours):\n" + data.link + "\nAdd items to your cart and send your order back here.") : "";
   document.getElementById("linkResult").innerHTML =
     '<div class="card artcard"><label>New link (share with the customer)</label>' +
@@ -891,8 +997,57 @@ async function createLink() {
     '</div></div>';
   lk_label.value = lk_phone.value = "";
   loadLinks();
+  loadCustomerSuggestions(); // remember this customer for next time
 }
 function copyLink() { navigator.clipboard.writeText(document.getElementById("theLink").textContent).then(() => toast("Copied")); }
+
+// ---- create-link autocomplete (remembers past customers) ----
+let CUSTOMERS = [];   // [{label, phone}] of everyone we've dealt with before
+let AC_MATCHES = [];  // currently shown suggestions (shared; one dropdown open at a time)
+
+async function loadCustomerSuggestions() {
+  const { data } = await api("/api/admin/tokens?suggest=1");
+  if (data && data.customers) CUSTOMERS = data.customers;
+}
+
+function acFilter(field) {
+  const isPhone = field === "phone";
+  const inp = document.getElementById(isPhone ? "lk_phone" : "lk_label");
+  const drop = document.getElementById(isPhone ? "lk_phone_ac" : "lk_label_ac");
+  const other = document.getElementById(isPhone ? "lk_label_ac" : "lk_phone_ac");
+  if (other) other.style.display = "none";
+  const q = (inp.value || "").trim().toLowerCase();
+  const qd = q.replace(/[^0-9]/g, "");
+  if (!q) { drop.style.display = "none"; return; }
+  AC_MATCHES = CUSTOMERS.filter((c) => {
+    const phone = c.phone || "", label = (c.label || "").toLowerCase();
+    return isPhone ? (qd && phone.includes(qd)) : (label.includes(q) || (qd && phone.includes(qd)));
+  }).slice(0, 8);
+  if (!AC_MATCHES.length) { drop.style.display = "none"; return; }
+  drop.innerHTML = AC_MATCHES.map((c, i) =>
+    '<div class="ac-item" onclick="acPick(' + i + ')"><strong>' + esc(c.label || "—") + '</strong><span>' + esc(c.phone || "") + '</span></div>'
+  ).join("");
+  drop.style.display = "block";
+}
+
+function acPick(i) {
+  const c = AC_MATCHES[i];
+  if (!c) return;
+  document.getElementById("lk_label").value = c.label || "";
+  document.getElementById("lk_phone").value = phoneTo10(c.phone || "");
+  document.getElementById("lk_label_ac").style.display = "none";
+  document.getElementById("lk_phone_ac").style.display = "none";
+}
+
+// Close the suggestion dropdowns when clicking away.
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#lk_label, #lk_label_ac")) {
+    const d = document.getElementById("lk_label_ac"); if (d) d.style.display = "none";
+  }
+  if (!e.target.closest("#lk_phone, #lk_phone_ac")) {
+    const d = document.getElementById("lk_phone_ac"); if (d) d.style.display = "none";
+  }
+});
 
 async function loadLinks() {
   const { data } = await api("/api/admin/tokens");
@@ -900,18 +1055,55 @@ async function loadLinks() {
   const now = data.now;
   const el = document.getElementById("linkList");
   if (!data.tokens.length) { el.innerHTML = '<p class="muted">No links yet.</p>'; return; }
-  el.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Status</th><th>Expires</th><th></th></tr></thead><tbody>' +
+  el.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Status</th><th>Expires</th><th>Adjust validity</th><th></th></tr></thead><tbody>' +
     data.tokens.map((t) => {
       const expired = t.is_revoked || now > t.expires_at;
       const status = t.is_revoked ? '<span class="expired">Revoked</span>' : (expired ? '<span class="expired">Expired</span>' : '<span class="live">Active</span>');
+      const adjust = expired ? '<span class="muted">—</span>' :
+        '<div class="hours-adj">' +
+          '<div class="stepper">' +
+            '<button type="button" onclick="adjHours(' + jq(t.id) + ',-1)">−</button>' +
+            '<input type="number" id="adj_' + t.id + '" value="0" oninput="adjHoursChanged(' + jq(t.id) + ')">' +
+            '<button type="button" onclick="adjHours(' + jq(t.id) + ',1)">+</button>' +
+          '</div>' +
+          '<span class="muted" style="font-size:12px">hrs</span>' +
+          '<button class="btn sm" id="adjsave_' + t.id + '" style="display:none" onclick="saveHours(' + jq(t.id) + ')">Save</button>' +
+        '</div>';
       return '<tr><td>' + esc(t.customer_label || "—") + '<br><span class="muted" style="font-size:12px">' + esc(t.customer_phone || "") + '</span></td>' +
         '<td>' + status + '</td><td>' + fmt(t.expires_at) + '</td>' +
+        '<td>' + adjust + '</td>' +
         '<td>' + (expired ? '' : '<button class="btn danger sm" onclick="revoke(' + jq(t.id) + ')">Revoke</button>') + '</td></tr>';
     }).join("") + '</tbody></table></div>';
 }
 async function revoke(id) {
   const { ok } = await api("/api/admin/tokens", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
   if (ok) { toast("Revoked"); loadLinks(); }
+}
+
+// Adjust an active link's expiry by whole hours. The Save button only appears
+// once the value is non-zero, and the change is written only on Save.
+function adjHours(id, d) {
+  const inp = document.getElementById("adj_" + id);
+  if (!inp) return;
+  inp.value = (parseInt(inp.value) || 0) + d;
+  adjHoursChanged(id);
+}
+function adjHoursChanged(id) {
+  const inp = document.getElementById("adj_" + id);
+  const save = document.getElementById("adjsave_" + id);
+  if (!inp || !save) return;
+  save.style.display = (parseInt(inp.value) || 0) !== 0 ? "inline-flex" : "none";
+}
+async function saveHours(id) {
+  const inp = document.getElementById("adj_" + id);
+  const v = parseInt(inp && inp.value) || 0;
+  if (!v) return;
+  const { ok, data } = await api("/api/admin/tokens", {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, delta_hours: v }),
+  });
+  if (ok && data && data.ok) { toast(v > 0 ? "Added " + v + "h" : "Removed " + (-v) + "h"); loadLinks(); }
+  else toast("Failed");
 }
 
 // ---- orders ----
