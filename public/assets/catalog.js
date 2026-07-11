@@ -1179,6 +1179,41 @@ function removeItem(id) {
 function openCart()  { document.getElementById('drawer').classList.add('open'); document.body.style.overflow = 'hidden'; }
 function closeCart() { document.getElementById('drawer').classList.remove('open'); document.body.style.overflow = ''; }
 
+// ── Order history (customer's own past purchases, by phone number on their link) ──
+async function openHistory() {
+  const d = document.getElementById('historyDrawer');
+  d.classList.add('open'); document.body.style.overflow = 'hidden';
+  const body = document.getElementById('historyBody');
+  body.innerHTML = '<p class="muted" style="padding:12px">Loading your orders…</p>';
+  const { ok, status, data } = await api('/api/history?token=' + encodeURIComponent(TOKEN));
+  if (status === 403) { body.innerHTML = '<p class="muted" style="padding:12px">This link has expired.</p>'; return; }
+  if (!ok || !data) { body.innerHTML = '<p class="muted" style="padding:12px">Could not load your orders. Please try again.</p>'; return; }
+  renderHistory(data.orders || []);
+}
+function closeHistory() { document.getElementById('historyDrawer').classList.remove('open'); document.body.style.overflow = ''; }
+function renderHistory(orders) {
+  const body = document.getElementById('historyBody');
+  if (!orders.length) {
+    body.innerHTML = '<p class="muted" style="padding:16px 12px">No past orders yet. Anything you order will show up here next time.</p>';
+    return;
+  }
+  body.innerHTML = orders.map(o => {
+    const dt = new Date(o.created_at);
+    const dateStr = isNaN(dt) ? '' : dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const lines = (o.items || []).map(it => {
+      const bits = [esc(it.name || it.article_code || 'Item')];
+      if (it.color) bits.push(esc(it.color));
+      if (it.size) bits.push(esc(it.size));
+      return '<div class="hist-line"><span>' + bits.join(' · ') + '</span><span class="muted">×' + (it.qty || 1) + '</span></div>';
+    }).join('');
+    const totalStr = (SHOW_PRICES && o.est_total) ? '<span class="hist-total">' + esc(CUR) + ' ' + o.est_total + '</span>' : '';
+    return '<div class="hist-order">' +
+      '<div class="hist-head"><strong>' + dateStr + '</strong>' + totalStr + '</div>' +
+      lines +
+    '</div>';
+  }).join('');
+}
+
 async function sendOrder() {
   const items = Object.keys(CART).map((id) => ({ variant_id: id, qty: CART[id].qty }));
   if (!items.length) return toast('Cart is empty');

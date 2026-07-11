@@ -294,58 +294,80 @@ function renderStock() {
   else if (sortVal === "category") articles.sort((a, b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
   else articles.sort((a, b) => (b.created_at || 0) - (a.created_at || 0)); // newest
 
-  // Build rows per-article. Articles with NO variants still get a row so a newly
-  // added product is always visible in Stock (it was previously invisible until a
-  // colour/size was added).
-  const allRows = [];
-  articles.forEach(a => {
-    const vs = a.variants || [];
-    if (vs.length) vs.forEach(v => allRows.push({ a, v }));
-    else allRows.push({ a, v: null });
-  });
-
-  const rows = allRows.filter(({ a }) =>
+  // Filter to matching articles (search matches code / name / category).
+  const filtered = articles.filter(a =>
     !rawQ ||
     (a.article_code || "").toLowerCase().includes(rawQ) ||
     (a.name || "").toLowerCase().includes(rawQ) ||
     (a.category || "").toLowerCase().includes(rawQ)
   );
-  if (!rows.length) {
+  if (!filtered.length) {
     el.innerHTML = rawQ
       ? '<p class="muted">No results for that search.</p>'
       : '<p class="muted">No articles yet. Use <strong>Add Product</strong> to add one.</p>';
     return;
   }
-  let lastAid = null;
-  el.innerHTML =
-    '<div class="tbl-wrap"><table><thead><tr><th>Bag</th><th>Colour</th><th>Size</th><th>Price (' + esc(cur) + ')</th><th>Qty</th><th>Live</th><th></th></tr></thead><tbody>' +
-    rows.map(({ a, v }) => {
-      // Status badge (Live/Not live) is shown once, on the first row of each article.
-      const firstRow = a.id !== lastAid;
-      lastAid = a.id;
-      const info = stockLiveInfo(a);
-      const badge = firstRow
-        ? (info.live ? '<span class="stock-badge live-badge">● Live</span>' : '<span class="stock-badge notlive-badge">Not live</span>')
-        : '';
-      const reasonLine = (firstRow && !info.live && info.reason)
-        ? '<div class="notlive-reason">' + esc(info.reason) + '</div>' : '';
-      const editBtn = '<td><button class="btn sm ghost" style="padding:4px 10px;white-space:nowrap" onclick="openEditModal(' + jq(a.id) + ')">✏ Edit</button></td>';
-      const bagCell = '<td><strong>' + esc(a.article_code) + '</strong>' + (badge ? ' ' + badge : '') +
-        '<br><span class="muted" style="font-size:12px">' + esc(a.name || "") + '</span>' + reasonLine + '</td>';
-      if (!v) {
-        // Article with no colours/sizes yet — not live. Show it so it can be completed.
-        return '<tr class="row-notlive" data-aid="' + esc(a.id) + '">' + bagCell +
-          '<td colspan="5"><span class="muted" style="font-size:12px">Click ✏ Edit to add a colour / size / price and a stock quantity.</span></td>' +
-          editBtn + '</tr>';
-      }
-      return '<tr' + (info.live ? '' : ' class="row-notlive-soft"') + ' data-id="' + v.id + '" data-aid="' + esc(a.id) + '">' + bagCell +
+
+  // Each article is ONE collapsible group: a header row (code, name, Live badge,
+  // expand arrow) with its colour/size variant rows nested underneath. Groups are
+  // collapsed by default (expanded automatically while searching) so the list stays
+  // tidy instead of repeating the article name on every variant row.
+  const chevron = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>';
+  const expandAll = !!rawQ;
+
+  const groupsHTML = filtered.map(a => {
+    const vs = a.variants || [];
+    const info = stockLiveInfo(a);
+    const collapsed = !expandAll;
+    const badge = info.live ? '<span class="stock-badge live-badge">● Live</span>' : '<span class="stock-badge notlive-badge">Not live</span>';
+    const reasonLine = (!info.live && info.reason) ? '<div class="notlive-reason">' + esc(info.reason) + '</div>' : '';
+    const colours = new Set(vs.map(v => v.color).filter(Boolean)).size;
+    const summary = vs.length
+      ? (colours ? colours + ' colour' + (colours !== 1 ? 's' : '') + ' · ' : '') + vs.length + ' variant' + (vs.length !== 1 ? 's' : '')
+      : 'No colours/sizes yet — click Edit to add';
+    const editBtn = '<button class="btn sm ghost" style="padding:4px 10px;white-space:nowrap" onclick="event.stopPropagation();openEditModal(' + jq(a.id) + ')">✏ Edit</button>';
+
+    const headRow =
+      '<tr class="art-head' + (collapsed ? ' collapsed' : '') + '" data-aid="' + esc(a.id) + '" onclick="toggleArtGroup(this)">' +
+        '<td>' +
+          '<div class="art-head-main">' +
+            '<span class="art-toggle">' + (vs.length ? chevron : '') + '</span>' +
+            '<div class="art-head-txt"><strong>' + esc(a.article_code) + '</strong> ' + badge +
+              '<div class="muted" style="font-size:12px">' + esc(a.name || "") + '</div>' + reasonLine + '</div>' +
+          '</div>' +
+        '</td>' +
+        '<td colspan="4" class="muted art-head-sum">' + esc(summary) + '</td>' +
+        '<td></td>' +
+        '<td style="text-align:right">' + editBtn + '</td>' +
+      '</tr>';
+
+    const varRows = vs.map(v =>
+      '<tr class="art-var' + (info.live ? '' : ' row-notlive-soft') + (collapsed ? ' collapsed' : '') + '" data-id="' + v.id + '" data-aid="' + esc(a.id) + '">' +
+        '<td class="art-var-indent"></td>' +
         '<td>' + esc(v.color || "") + '</td>' +
         '<td>' + esc(v.size || "") + '</td>' +
         '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '"></td>' +
         '<td><input class="qtybox qty-in" type="number" value="' + v.available_qty + '"></td>' +
         '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' onchange="toggleStockLive(this)" style="width:auto"></td>' +
-        editBtn + '</tr>';
-    }).join("") + '</tbody></table></div>';
+        '<td></td>' +
+      '</tr>'
+    ).join("");
+
+    return headRow + varRows;
+  }).join("");
+
+  el.innerHTML =
+    '<div class="tbl-wrap"><table><thead><tr><th>Article</th><th>Colour</th><th>Size</th><th>Price (' + esc(cur) + ')</th><th>Qty</th><th>Live</th><th></th></tr></thead><tbody>' +
+    groupsHTML + '</tbody></table></div>';
+}
+
+// Expand/collapse one article's variant rows in the Stock table.
+function toggleArtGroup(head) {
+  const aid = head.dataset.aid;
+  const collapsed = head.classList.toggle("collapsed");
+  document.querySelectorAll("#stockTable tr.art-var").forEach(tr => {
+    if (tr.dataset.aid === aid) tr.classList.toggle("collapsed", collapsed);
+  });
 }
 
 async function saveStock() {
@@ -386,19 +408,20 @@ function refreshArticleLive(aid) {
   const a = ARTICLES.find(x => x.id === aid);
   if (!a) return;
   const info = stockLiveInfo(a);
-  const rows = [...document.querySelectorAll("#stockTable tr[data-aid]")].filter(tr => tr.dataset.aid === String(aid));
-  rows.forEach((tr, i) => {
-    if (tr.dataset.id) tr.classList.toggle("row-notlive-soft", !info.live);
-    if (i !== 0) return;
-    const badge = tr.querySelector(".stock-badge");
-    if (badge) { badge.className = "stock-badge " + (info.live ? "live-badge" : "notlive-badge"); badge.textContent = info.live ? "● Live" : "Not live"; }
-    const bagTd = tr.querySelector("td");
-    let reason = bagTd ? bagTd.querySelector(".notlive-reason") : null;
-    if (!info.live && info.reason) {
-      if (!reason) { reason = document.createElement("div"); reason.className = "notlive-reason"; bagTd.appendChild(reason); }
-      reason.textContent = info.reason;
-    } else if (reason) { reason.remove(); }
+  // Variant rows get the dimmed style; the header row (.art-head) carries the badge/reason.
+  document.querySelectorAll("#stockTable tr.art-var").forEach(tr => {
+    if (tr.dataset.aid === String(aid)) tr.classList.toggle("row-notlive-soft", !info.live);
   });
+  const head = [...document.querySelectorAll("#stockTable tr.art-head")].find(tr => tr.dataset.aid === String(aid));
+  if (!head) return;
+  const badge = head.querySelector(".stock-badge");
+  if (badge) { badge.className = "stock-badge " + (info.live ? "live-badge" : "notlive-badge"); badge.textContent = info.live ? "● Live" : "Not live"; }
+  const host = head.querySelector(".art-head-txt") || head.querySelector("td");
+  let reason = host.querySelector(".notlive-reason");
+  if (!info.live && info.reason) {
+    if (!reason) { reason = document.createElement("div"); reason.className = "notlive-reason"; host.appendChild(reason); }
+    reason.textContent = info.reason;
+  } else if (reason) { reason.remove(); }
 }
 
 function renderCatList() {

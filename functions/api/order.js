@@ -27,6 +27,7 @@ export async function onRequestPost(context) {
   rows.forEach((r) => (map[r.id] = r));
 
   const lines = [];
+  const snapshot = []; // stored on the order so history reads it without re-joining variants
   let total = 0;
   items.forEach((it, idx) => {
     const v = map[it.variant_id];
@@ -40,6 +41,7 @@ export async function onRequestPost(context) {
     parts.push(`Qty ${qty}`);
     if (showPrices) parts.push(`${cur}${price}/pc`);
     lines.push(parts.join(" | "));
+    snapshot.push({ variant_id: v.id, article_code: v.article_code, name: v.name, color: v.color, size: v.size, qty, price });
   });
 
   const text = [
@@ -53,8 +55,8 @@ export async function onRequestPost(context) {
   ].filter(Boolean).join("\n");
 
   await env.DB.prepare(
-    "INSERT INTO orders (id, token_id, customer_label, items_json, est_total, created_at, status) VALUES (?,?,?,?,?,?,?)"
-  ).bind(newId(), tok.id, tok.customer_label || "", JSON.stringify(items), total, Date.now(), "sent").run();
+    "INSERT INTO orders (id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status) VALUES (?,?,?,?,?,?,?,?)"
+  ).bind(newId(), tok.id, tok.customer_label || "", (tok.customer_phone || "").replace(/[^0-9]/g, ""), JSON.stringify(snapshot), total, Date.now(), "sent").run();
 
   const wa = `https://wa.me/${settings.owner_phone}?text=${encodeURIComponent(text)}`;
   return json({ ok: true, whatsapp: wa });

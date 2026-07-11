@@ -56,12 +56,15 @@ CREATE TABLE IF NOT EXISTS orders (
   id             TEXT PRIMARY KEY,
   token_id       TEXT,
   customer_label TEXT,
+  customer_phone TEXT,               -- copied from the link at checkout so the
+                                     -- customer's history survives token cleanup
   items_json     TEXT NOT NULL,
   est_total      REAL,
   created_at     INTEGER NOT NULL,
   status         TEXT NOT NULL DEFAULT 'sent'
 );
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
 
 CREATE TABLE IF NOT EXISTS banners (
   id         TEXT PRIMARY KEY,

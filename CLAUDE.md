@@ -47,7 +47,8 @@ public/
 functions/
   api/_util.js             shared: json(), sha256hex(), checkAdmin(), isAdmin(), validToken()
   api/catalog.js           GET /api/catalog?token=…
-  api/order.js             POST /api/order
+  api/order.js             POST /api/order  (stores customer_phone + item snapshot on the order)
+  api/history.js           GET /api/history?token=… → customer's own past orders (by phone)
   api/img/[[path]].js      GET /api/img/<key> → R2 stream
   api/admin/_middleware.js  auth gate for ALL /api/admin/* routes (runs before every endpoint)
   api/admin/articles.js    GET/POST/PATCH/DELETE articles (GET runs 3 D1 queries in parallel)
@@ -182,7 +183,10 @@ The 20s timeout in `api()` covers the worst-case cold start.
 `variants(id, article_id, color, size, price, available_qty, is_active, updated_at)`
 `photos(id, article_id, color, url, sort_order)`
 `access_tokens(id, token_hash, customer_label, customer_phone, created_at, expires_at, is_revoked)`
-`orders(id, token_id, customer_label, items_json, est_total, created_at, status)`
+`orders(id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status)`
+  - `customer_phone` copied from the link at checkout so a customer's history survives the
+    7-day token purge. `items_json` stores an enriched snapshot (code/name/colour/size/qty/price).
+  - Migration for existing DBs: `ALTER TABLE orders ADD COLUMN customer_phone TEXT;`
 `banners(id, url, link, sort_order, created_at)`
 `categories(id, name, created_at)`
 `category_images(id, category, image_url, updated_at)`
@@ -211,5 +215,5 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=19**, **product.html = v=19**, **s.html (catalogue) = v=22**
+  Current versions: **admin.html = v=19**, **product.html = v=19**, **s.html (catalogue) = v=23**
   (bump `common.js`, `admin.js`/`catalog.js`, and `styles.css` on the page you changed).
