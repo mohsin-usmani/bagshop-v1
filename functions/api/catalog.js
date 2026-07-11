@@ -9,8 +9,11 @@ export async function onRequestGet(context) {
 
   const settings = await getSettings(env);
 
+  // A product is live purely on stock: it shows when it has at least one active
+  // variant with qty > 0 (enforced by the variants query + the list filter below).
+  // There is no separate article-level on/off switch.
   const articles = (await env.DB.prepare(
-    "SELECT * FROM articles WHERE is_active = 1 ORDER BY category, article_code"
+    "SELECT * FROM articles ORDER BY category, article_code"
   ).all()).results || [];
   const variants = (await env.DB.prepare(
     "SELECT * FROM variants WHERE is_active = 1 AND available_qty > 0"
@@ -32,7 +35,9 @@ export async function onRequestGet(context) {
 
   const list = Object.values(byA).filter((a) => a.variants.length > 0);
 
-  const categories = [...new Set(articles.map((a) => a.category).filter(Boolean))];
+  // Only surface categories that actually have live products (derive from `list`,
+  // not every article row) so empty categories don't appear in the filters/menu.
+  const categories = [...new Set(list.map((a) => a.category).filter(Boolean))];
   const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
   const sizes = [...new Set(variants.map((v) => v.size).filter(Boolean))];
 

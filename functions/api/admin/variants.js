@@ -7,9 +7,12 @@ export async function onRequestPost(context) {
   const b = await request.json();
   if (!b.article_id) return json({ error: "no_article" }, 400);
   const id = newId();
+  // New colours default to NOT live so a product isn't published until the admin
+  // ticks Live (in the wizard or the Stock tab). Pass is_active:1 to add it live.
+  const active = b.is_active ? 1 : 0;
   await env.DB.prepare(
-    "INSERT INTO variants (id, article_id, color, size, price, available_qty, is_active, updated_at) VALUES (?,?,?,?,?,?,1,?)"
-  ).bind(id, b.article_id, b.color || "", b.size || "", b.price ?? null, parseInt(b.qty) || 0, Date.now()).run();
+    "INSERT INTO variants (id, article_id, color, size, price, available_qty, is_active, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+  ).bind(id, b.article_id, b.color || "", b.size || "", b.price ?? null, parseInt(b.qty) || 0, active, Date.now()).run();
   return json({ ok: true, id });
 }
 

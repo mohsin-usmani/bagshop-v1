@@ -267,12 +267,11 @@ function allVariants() {
 }
 
 // Determines whether a product is visible to customers, mirroring the catalog API
-// rule: article active AND at least one active variant with qty > 0.
+// rule: at least one active variant (Live ticked) with qty > 0.
 // Returns { live, reason } — reason explains what's missing when not live.
 function stockLiveInfo(a) {
   const vs = a.variants || [];
   if (!vs.length) return { live: false, reason: "No colours/sizes yet — add one to go live." };
-  if (!a.is_active) return { live: false, reason: 'Product is switched off — open Edit and tick "Active".' };
   const hasStock  = vs.some(v => (v.available_qty || 0) > 0);
   const hasActive = vs.some(v => v.is_active);
   if (vs.some(v => v.is_active && (v.available_qty || 0) > 0)) return { live: true };
@@ -326,7 +325,7 @@ function renderStock() {
       lastAid = a.id;
       const info = stockLiveInfo(a);
       const badge = firstRow
-        ? (info.live ? '<span class="live-badge">● Live</span>' : '<span class="notlive-badge">Not live</span>')
+        ? (info.live ? '<span class="stock-badge live-badge">● Live</span>' : '<span class="stock-badge notlive-badge">Not live</span>')
         : '';
       const reasonLine = (firstRow && !info.live && info.reason)
         ? '<div class="notlive-reason">' + esc(info.reason) + '</div>' : '';
@@ -335,16 +334,16 @@ function renderStock() {
         '<br><span class="muted" style="font-size:12px">' + esc(a.name || "") + '</span>' + reasonLine + '</td>';
       if (!v) {
         // Article with no colours/sizes yet — not live. Show it so it can be completed.
-        return '<tr class="row-notlive">' + bagCell +
+        return '<tr class="row-notlive" data-aid="' + esc(a.id) + '">' + bagCell +
           '<td colspan="5"><span class="muted" style="font-size:12px">Click ✏ Edit to add a colour / size / price and a stock quantity.</span></td>' +
           editBtn + '</tr>';
       }
-      return '<tr' + (info.live ? '' : ' class="row-notlive-soft"') + ' data-id="' + v.id + '">' + bagCell +
+      return '<tr' + (info.live ? '' : ' class="row-notlive-soft"') + ' data-id="' + v.id + '" data-aid="' + esc(a.id) + '">' + bagCell +
         '<td>' + esc(v.color || "") + '</td>' +
         '<td>' + esc(v.size || "") + '</td>' +
         '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '"></td>' +
         '<td><input class="qtybox qty-in" type="number" value="' + v.available_qty + '"></td>' +
-        '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' style="width:auto"></td>' +
+        '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' onchange="toggleStockLive(this)" style="width:auto"></td>' +
         editBtn + '</tr>';
     }).join("") + '</tbody></table></div>';
 }
@@ -358,6 +357,48 @@ async function saveStock() {
   }));
   const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ updates }) });
   if (ok) { toast("Stock saved (" + updates.length + " rows)"); loadArticles(); } else toast("Save failed");
+}
+
+// The "Live" checkbox acts like a real switch: it saves that one colour immediately
+// (along with its current qty/price shown in the row) and refreshes the Live badge,
+// without touching other rows' unsaved edits or requiring "Save changes".
+async function toggleStockLive(cb) {
+  const tr = cb.closest("tr[data-id]");
+  if (!tr) return;
+  const vid = tr.dataset.id, aid = tr.dataset.aid;
+  const qEl = tr.querySelector(".qty-in"), pEl = tr.querySelector(".price-in");
+  const qty = qEl ? (parseInt(qEl.value) || 0) : 0;
+  const price = pEl && pEl.value.trim() !== "" ? Number(pEl.value) : null;
+  cb.disabled = true;
+  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ updates: [{ id: vid, available_qty: qty, price, is_active: cb.checked }] }) });
+  cb.disabled = false;
+  if (!ok) { cb.checked = !cb.checked; return toast("Save failed"); }
+  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === vid); if (v) { v.is_active = cb.checked ? 1 : 0; v.available_qty = qty; v.price = price; break; } }
+  refreshArticleLive(aid);
+  const info = stockLiveInfo(ARTICLES.find(a => a.id === aid) || {});
+  toast(cb.checked ? (info.live ? "✓ Colour is live" : "Saved — add stock qty to go live") : "Colour hidden");
+}
+
+// Recompute an article's Live/Not-live state and update just its rows in the table
+// (badge, reason, and dimmed styling) — no full re-render, so edits elsewhere stay.
+function refreshArticleLive(aid) {
+  const a = ARTICLES.find(x => x.id === aid);
+  if (!a) return;
+  const info = stockLiveInfo(a);
+  const rows = [...document.querySelectorAll("#stockTable tr[data-aid]")].filter(tr => tr.dataset.aid === String(aid));
+  rows.forEach((tr, i) => {
+    if (tr.dataset.id) tr.classList.toggle("row-notlive-soft", !info.live);
+    if (i !== 0) return;
+    const badge = tr.querySelector(".stock-badge");
+    if (badge) { badge.className = "stock-badge " + (info.live ? "live-badge" : "notlive-badge"); badge.textContent = info.live ? "● Live" : "Not live"; }
+    const bagTd = tr.querySelector("td");
+    let reason = bagTd ? bagTd.querySelector(".notlive-reason") : null;
+    if (!info.live && info.reason) {
+      if (!reason) { reason = document.createElement("div"); reason.className = "notlive-reason"; bagTd.appendChild(reason); }
+      reason.textContent = info.reason;
+    } else if (reason) { reason.remove(); }
+  });
 }
 
 function renderCatList() {
@@ -402,7 +443,7 @@ async function saveArticle(id) {
     category:       val("ect_" + id),
     base_price:     val("ebp_" + id) ? Number(val("ebp_" + id)) : null,
     description:    (document.getElementById("edd_" + id) || {}).value?.trim() || "",
-    is_active:      !!(document.getElementById("ea_" + id) || {}).checked,
+    is_active:      1, // no article on/off switch — visibility is driven by the per-colour Live toggle + stock
     is_new_arrival: !!(document.getElementById("ena_" + id) || {}).checked,
   };
   if (!body.article_code || !body.category) return toast("Code and category are required");
@@ -472,7 +513,7 @@ async function wzStep1Submit() {
     const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
     const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: WIZARD_AID, article_code: code, name, category: cat, description: desc,
-        base_price: basePrice, is_active: a.is_active ? 1 : 0, is_new_arrival: a.is_new_arrival ? 1 : 0 }) });
+        base_price: basePrice, is_active: 1, is_new_arrival: a.is_new_arrival ? 1 : 0 }) });
     if (!ok) return toast("Failed to save changes");
     toast("Details saved");
     await loadArticles();
@@ -540,7 +581,7 @@ function renderWizardVariantList() {
 async function wzAddVariant() {
   if (!WIZARD_AID) return;
   const color = val("wz2_vc"), size = val("wz2_vs"), price = val("wz2_vp"), qty = val("wz2_vq") || 0;
-  const isActive = 1; // new variants are always added live
+  const isActive = 0; // new products start NOT live — publish via the Live toggle (here or in Stock)
   if (!color && !size) return toast("Enter a colour or size");
   const { ok } = await api("/api/admin/variants", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ article_id: WIZARD_AID, color, size, price: price ? Number(price) : null, qty: Number(qty), is_active: isActive }) });
@@ -562,44 +603,48 @@ async function wzToggleNewArrival() {
   const checked = (document.getElementById("wz2_na") || {}).checked;
   await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
     body: JSON.stringify({ id: WIZARD_AID, article_code: a.article_code, name: a.name, category: a.category,
-      base_price: a.base_price, description: a.description, is_active: a.is_active, is_new_arrival: checked ? 1 : 0 }) });
+      base_price: a.base_price, description: a.description, is_active: 1, is_new_arrival: checked ? 1 : 0 }) });
 }
-// Live-status bar shown inside the wizard (steps 2 & 3). Reflects real customer
-// visibility and offers a master ON/OFF (article is_active) toggle.
+// Live-status bar shown inside the wizard (steps 2 & 3). The Live toggle is the same
+// switch as the per-colour "Live" box in Stock — it turns every colour of this product
+// on/off. New products start NOT live, so the admin flips this when ready to publish.
 function wzStatusHTML() {
   const a = ARTICLES.find(x => x.id === WIZARD_AID);
   if (!a) return '';
   const info = stockLiveInfo(a);
-  const on = !(a.is_active === 0 || a.is_active === false);
-  // If it's only hidden because the switch is off (but stock is ready), guide to the toggle.
-  const readyButOff = !info.live && !a.is_active && (a.variants || []).some(v => v.is_active && (v.available_qty || 0) > 0);
-  const msg = info.live
-    ? 'This product is visible to customers.'
-    : readyButOff
-      ? 'Ready — turn on "Show to customers" to publish it.'
-      : esc(info.reason);
+  const vs = a.variants || [];
+  const anyLive = vs.some(v => v.is_active);
+  const msg = info.live ? 'This product is visible to customers.' : esc(info.reason);
+  const toggle = vs.length
+    ? '<label class="wz-live-toggle" title="Show/hide this product to customers — same as the Live switch in Stock">' +
+        '<input type="checkbox" ' + (anyLive ? 'checked' : '') + ' onchange="wzSetLive(this.checked)"> Live' +
+      '</label>'
+    : '';
   return '<div class="wz-status ' + (info.live ? 'on' : 'off') + '">' +
     '<div class="wz-status-main">' +
       '<span class="' + (info.live ? 'live-badge' : 'notlive-badge') + '">' + (info.live ? '● Live' : 'Not live') + '</span>' +
       '<span class="wz-status-msg">' + msg + '</span>' +
     '</div>' +
-    '<label class="wz-live-toggle" title="Master on/off switch for this product">' +
-      '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="wzToggleActive(this.checked)"> Show to customers' +
-    '</label>' +
+    toggle +
   '</div>';
 }
 function refreshWizardStatus() {
   const el = document.getElementById("wzStatus");
   if (el) el.innerHTML = wzStatusHTML();
 }
-async function wzToggleActive(checked) {
+// Master Live switch for the wizard — sets every colour of the product on/off at once.
+async function wzSetLive(checked) {
   const a = ARTICLES.find(x => x.id === WIZARD_AID); if (!a) return;
-  const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id: WIZARD_AID, article_code: a.article_code, name: a.name, category: a.category,
-      base_price: a.base_price, description: a.description, is_active: checked ? 1 : 0, is_new_arrival: a.is_new_arrival ? 1 : 0 }) });
+  const vs = a.variants || [];
+  if (!vs.length) return;
+  const updates = vs.map(v => ({ id: v.id, available_qty: v.available_qty, price: v.price, is_active: checked }));
+  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ updates }) });
   if (!ok) return toast("Failed");
-  await loadArticles();
+  vs.forEach(v => { v.is_active = checked ? 1 : 0; });
   refreshWizardStatus();
+  const info = stockLiveInfo(a);
+  toast(checked ? (info.live ? "✓ Product is live" : "Live on — add stock qty to show it") : "Product hidden");
 }
 
 function wzStep3() {
@@ -718,7 +763,6 @@ function buildEditModalHTML(a) {
       '</div>' +
       '<div class="field"><label>Description</label><textarea id="edd_' + a.id + '" rows="2" style="resize:vertical">' + esc(a.description || "") + '</textarea></div>' +
       '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
-        '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ea_' + a.id + '" ' + (a.is_active ? "checked" : "") + ' style="width:auto"> Active</label>' +
         '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal"><input type="checkbox" id="ena_' + a.id + '" ' + (a.is_new_arrival ? "checked" : "") + ' style="width:auto"> ⚡ New Arrival</label>' +
         '<button class="btn sm" onclick="saveArticle(' + jq(a.id) + ')">Save info</button>' +
         '<button class="btn danger sm" onclick="modalDelArticle(' + jq(a.id) + ')">Delete article</button>' +

@@ -133,6 +133,20 @@ Key globals: `AUTH_FAIL_FIRED` flag prevents authFail racing when multiple API c
 
 ## Admin panel features implemented
 
+### Go-live rule (IMPORTANT)
+A product is visible to customers when **at least one colour/size has its "Live" box
+ticked AND has qty > 0**. There is **no** article-level on/off switch — the old article
+`is_active` "Active" toggle (edit modal) and "Show to customers" (wizard) were removed.
+The server (`catalog.js`) no longer filters on `articles.is_active`; visibility is driven
+solely by active variants with stock. `articles.is_active` is kept in the schema but is
+always written as `1`. `stockLiveInfo()` (admin.js) mirrors this rule for the status badges.
+
+- **New products/colours default to NOT live** (variants insert `is_active = 0` on both
+  `variants` POST and `articles` POST). The admin publishes with the **Live** switch.
+- **Live switch (two equivalent controls):** the per-colour "Live" checkbox in Stock
+  (`toggleStockLive`, auto-saves on toggle) and the master "Live" toggle in the Add-Product
+  wizard status bar (`wzSetLive`, flips every colour of the product at once).
+
 ### Stock tab
 - Table: article code, name, colour, size, price (editable), qty (editable), live toggle, Edit button
 - **Search** by code, name, or category (live filter)

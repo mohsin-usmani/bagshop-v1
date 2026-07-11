@@ -24,18 +24,19 @@ export async function onRequestPost(context) {
   const b = await request.json();
   const id = newId();
   const now = Date.now();
-  // New products are created hidden by default. They only go live when the admin
-  // turns on "Show to customers" (step 3 of the wizard). Pass is_active:1 to override.
-  const isActive = b.is_active ? 1 : 0;
+  // Products go live purely on stock (an active variant with qty > 0). There is no
+  // separate article on/off switch, so new articles are created active by default.
+  const isActive = b.is_active === 0 ? 0 : 1;
   await env.DB.prepare(
     "INSERT INTO articles (id, article_code, name, category, description, base_price, is_active, created_at) VALUES (?,?,?,?,?,?,?,?)"
   ).bind(id, b.article_code || "", b.name || "", b.category || "", b.description || "", b.base_price ?? null, isActive, now).run();
 
   if (Array.isArray(b.variants)) {
     for (const v of b.variants) {
+      // Default NOT live (see variants POST) — publish later via the Live toggle.
       await env.DB.prepare(
-        "INSERT INTO variants (id, article_id, color, size, price, available_qty, is_active, updated_at) VALUES (?,?,?,?,?,?,1,?)"
-      ).bind(newId(), id, v.color || "", v.size || "", v.price ?? null, parseInt(v.qty) || 0, now).run();
+        "INSERT INTO variants (id, article_id, color, size, price, available_qty, is_active, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+      ).bind(newId(), id, v.color || "", v.size || "", v.price ?? null, parseInt(v.qty) || 0, v.is_active ? 1 : 0, now).run();
     }
   }
   return json({ ok: true, id });
