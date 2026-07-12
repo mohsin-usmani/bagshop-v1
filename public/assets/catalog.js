@@ -117,6 +117,8 @@ async function init() {
   SHOW_PRICES = !!data.shop.show_prices;
   document.getElementById('navShopName').textContent = data.shop.name || '';
   document.getElementById('mobShopName').textContent = data.shop.name || '';
+  const navdShopName = document.getElementById('navdShopName');
+  if (navdShopName) navdShopName.textContent = data.shop.name || '';
   applyBranding(data.shop);
   loadCartFromStorage();
   renderNav();
@@ -132,6 +134,7 @@ async function init() {
 
 function showExpired() {
   document.getElementById('cartbar').style.display = 'none';
+  document.body.classList.remove('has-cartbar');
   document.getElementById('app').innerHTML =
     '<div class="notice card"><h2>Link expired</h2>' +
     '<p class="muted" style="margin-top:8px">This catalogue link is no longer active. Please message us on WhatsApp to get a fresh link.</p></div>';
@@ -232,20 +235,26 @@ function renderNav() {
   const cats = DATA
     ? ((DATA.nav_categories && DATA.nav_categories.length ? DATA.nav_categories : (DATA.filters.categories || [])).slice(0, 10))
     : [];
-  const bar = document.getElementById('navCatsBar');
-  if (!bar) return;
-  bar.innerHTML =
+  const catsHtml =
     '<button class="nav-cat-link' + (VIEW === 'home' && !CAT_FILTER ? ' active' : '') + '" onclick="goHome()">Home</button>' +
     cats.map(c =>
       '<button class="nav-cat-link' + (VIEW === 'catalogue' && CAT_FILTER === c ? ' active' : '') + '"' +
       ' onclick="goCategory(\'' + jq(c) + '\')">' + esc(c) + '</button>'
     ).join('') +
     '<button class="nav-cat-link' + (VIEW === 'catalogue' && !CAT_FILTER ? ' active' : '') + '" onclick="goCategory(\'\')">Shop All</button>';
+  // Same admin-configured list feeds both the mobile/narrow bar (#navCatsBar)
+  // and the single-row desktop header (#navdCatsBar).
+  const bar = document.getElementById('navCatsBar');
+  if (bar) bar.innerHTML = catsHtml;
+  const barD = document.getElementById('navdCatsBar');
+  if (barD) barD.innerHTML = catsHtml;
 
-  // update cart badge
+  // update cart badges (mobile + desktop)
   const total = Object.values(CART).reduce((n, c) => n + c.qty, 0);
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = total; badge.style.display = total ? 'flex' : 'none'; }
+  const badgeD = document.getElementById('navdCartBadge');
+  if (badgeD) { badgeD.textContent = total; badgeD.style.display = total ? 'flex' : 'none'; }
 }
 
 // Desktop dropdown disabled — categories navigate directly on click
@@ -305,7 +314,9 @@ function closeMenu() {
 
 function renderMobMenu() {
   if (!DATA) return;
-  const cats = DATA.filters.categories || [];
+  // Same admin-controlled menu list (and order/count, up to 10) as the desktop
+  // header — falls back to all categories only if the admin hasn't set one.
+  const cats = (DATA.nav_categories && DATA.nav_categories.length ? DATA.nav_categories : (DATA.filters.categories || [])).slice(0, 10);
   const shop = DATA.shop || {};
 
   document.getElementById('mobCatsList').innerHTML =
@@ -900,9 +911,9 @@ function quickAddToCart(aid) {
   const hasSizes = colVars.some(v => v.size && v.size.trim());
   if (colors.length === 1 && !hasSizes) {
     if (!SELECTION[aid]) SELECTION[aid] = { color: colors[0], qty: 1 };
-    addToCart(aid);
+    addToCart(aid); // adds silently (toast + badge update) — no interrupting drawer
   } else {
-    openDetail(aid);
+    openDetail(aid); // needs a colour/size choice — take them to the product page
   }
 }
 
@@ -943,9 +954,21 @@ function saveCartToStorage() {
 function loadCartFromStorage() {
   try {
     const raw = localStorage.getItem('bag_cart_' + TOKEN);
-    if (raw) { const c = JSON.parse(raw); Object.assign(CART, c); }
+    Object.keys(CART).forEach(k => delete CART[k]); // full resync, not merge — see pageshow handler below
+    if (raw) Object.assign(CART, JSON.parse(raw));
   } catch(e) {}
 }
+// Mobile back gestures/buttons often restore the page from the browser's
+// back-forward cache (bfcache) instead of reloading it — init() never re-runs,
+// so an item added on another page (e.g. the product page) never shows up
+// here unless we explicitly resync the in-memory cart from storage.
+window.addEventListener('pageshow', e => {
+  if (!e.persisted) return;
+  loadCartFromStorage();
+  renderNav();
+  renderCart();
+  if (VIEW === 'catalogue') renderCataloguePage(); else renderHomepage();
+});
 function refreshModal() {
   if (!MODAL_AID) return;
   const a = DATA.articles.find(x => x.id === MODAL_AID); if (!a) return;
@@ -1201,10 +1224,13 @@ function renderCart() {
   const ids = Object.keys(CART);
   const count = ids.reduce((n, id) => n + CART[id].qty, 0);
   document.getElementById('cartbar').style.display = ids.length ? 'block' : 'none';
+  document.body.classList.toggle('has-cartbar', ids.length > 0);
   document.getElementById('cartCount').textContent = count;
-  // nav badge
+  // nav badge (mobile + desktop)
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
+  const badgeD = document.getElementById('navdCartBadge');
+  if (badgeD) { badgeD.textContent = count; badgeD.style.display = count ? 'flex' : 'none'; }
   let total = 0;
   document.getElementById('cartLines').innerHTML = ids.map((id) => {
     total += (CART[id].price || 0) * CART[id].qty;

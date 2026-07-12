@@ -5,6 +5,7 @@ let CATEGORIES = [];
 let NAV_CATS = []; // admin-chosen header categories, in order (max 10)
 let WIZARD_AID = null;
 let EDIT_MODAL_AID = null;
+let EM_RELATED = []; // "You may also like" picks for the article being edited
 let AUTH_FAIL_FIRED = false; // guard: only run authFail logic once
 
 // Colour-name → swatch hex, for the variant chips in the wizard & edit modal.
@@ -354,63 +355,62 @@ function renderStock() {
     const colours = new Set(vs.map(v => v.color).filter(Boolean)).size;
     const summary = vs.length
       ? (colours ? colours + ' colour' + (colours !== 1 ? 's' : '') + ' · ' : '') + vs.length + ' variant' + (vs.length !== 1 ? 's' : '')
-      : 'No colours/sizes yet — click Edit to add';
-    const editBtn = '<button class="btn sm ghost" style="padding:4px 10px;white-space:nowrap" onclick="event.stopPropagation();openEditModal(' + jq(a.id) + ')">✏ Edit</button>';
+      : 'No colours/sizes yet — tap Edit to add';
+    const editBtn = '<button class="btn sm ghost sart-edit" onclick="event.stopPropagation();openEditModal(' + jq(a.id) + ')">✏ Edit</button>';
+    const nameLine = (a.name || a.category)
+      ? '<div class="sart-name">' + esc(a.name || '') + (a.name && a.category ? ' · ' : '') + esc(a.category || '') + '</div>'
+      : '';
 
-    const headRow =
-      '<tr class="art-head' + (collapsed ? ' collapsed' : '') + '" data-aid="' + esc(a.id) + '" onclick="toggleArtGroup(this)">' +
-        '<td>' +
-          '<div class="art-head-main">' +
-            '<span class="art-toggle">' + (vs.length ? chevron : '') + '</span>' +
-            '<div class="art-head-txt"><strong>' + esc(a.article_code) + '</strong> ' + badge +
-              '<div class="muted" style="font-size:12px">' + esc(a.name || "") + '</div>' + reasonLine + '</div>' +
-          '</div>' +
-        '</td>' +
-        '<td colspan="4" class="muted art-head-sum">' + esc(summary) + '</td>' +
-        '<td></td>' +
-        '<td style="text-align:right">' + editBtn + '</td>' +
-      '</tr>';
+    const head =
+      '<div class="sart-head' + (collapsed ? ' collapsed' : '') + '" data-aid="' + esc(a.id) + '" onclick="toggleArtGroup(this)">' +
+        '<span class="sart-chev">' + (vs.length ? chevron : '') + '</span>' +
+        '<div class="sart-info">' +
+          '<div class="sart-title"><strong>' + esc(a.article_code) + '</strong>' + badge + '</div>' +
+          nameLine +
+          '<div class="sart-summary">' + esc(summary) + '</div>' +
+          reasonLine +
+        '</div>' +
+        editBtn +
+      '</div>';
 
-    const varRows = vs.map(v =>
-      '<tr class="art-var' + (info.live ? '' : ' row-notlive-soft') + (collapsed ? ' collapsed' : '') + '" data-id="' + v.id + '" data-aid="' + esc(a.id) + '">' +
-        '<td class="art-var-indent"></td>' +
-        '<td>' + esc(v.color || "") + '</td>' +
-        '<td>' + esc(v.size || "") + '</td>' +
-        '<td><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" data-orig="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '" oninput="stockRowDirty(this)"></td>' +
-        '<td><div class="qty-cell"><input class="qtybox qty-in" type="number" value="' + v.available_qty + '" data-orig="' + v.available_qty + '" oninput="stockRowDirty(this)"><button class="row-save" style="display:none" onclick="saveRow(this)">Save</button></div></td>' +
-        '<td><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' onchange="toggleStockLive(this)" style="width:auto"></td>' +
-        '<td></td>' +
-      '</tr>'
+    const vars = vs.map(v =>
+      '<div class="svar' + (info.live ? '' : ' row-notlive-soft') + '" data-id="' + v.id + '" data-aid="' + esc(a.id) + '">' +
+        '<div class="svar-name">' + esc(v.color || '—') + (v.size ? ' · ' + esc(v.size) : '') + '</div>' +
+        '<div class="svar-fields">' +
+          '<label class="svar-f"><span>Price</span><input class="pricebox price-in" type="number" value="' + (v.price != null ? v.price : "") + '" data-orig="' + (v.price != null ? v.price : "") + '" placeholder="' + (a.base_price ?? "") + '" oninput="stockRowDirty(this)"></label>' +
+          '<label class="svar-f"><span>Qty</span><input class="qtybox qty-in" type="number" value="' + v.available_qty + '" data-orig="' + v.available_qty + '" oninput="stockRowDirty(this)"></label>' +
+          '<label class="svar-f svar-live"><span>Live</span><input type="checkbox" class="act-in" ' + (v.is_active ? "checked" : "") + ' onchange="toggleStockLive(this)"></label>' +
+          '<button class="row-save" style="display:none" onclick="saveRow(this)">Save</button>' +
+        '</div>' +
+      '</div>'
     ).join("");
 
-    return headRow + varRows;
+    return '<div class="sart" data-aid="' + esc(a.id) + '">' + head +
+      '<div class="sart-vars' + (collapsed ? ' collapsed' : '') + '">' + vars + '</div>' +
+    '</div>';
   }).join("");
 
-  el.innerHTML =
-    '<div class="tbl-wrap"><table><thead><tr><th>Article</th><th>Colour</th><th>Size</th><th>Price (' + esc(cur) + ')</th><th>Qty</th><th>Live</th><th></th></tr></thead><tbody>' +
-    groupsHTML + '</tbody></table></div>';
+  el.innerHTML = '<div class="stock-list">' + groupsHTML + '</div>';
 }
 
-// Expand/collapse one article's variant rows in the Stock table.
+// Expand/collapse one article's variant card in the Stock list.
 function toggleArtGroup(head) {
-  const aid = head.dataset.aid;
   const collapsed = head.classList.toggle("collapsed");
-  document.querySelectorAll("#stockTable tr.art-var").forEach(tr => {
-    if (tr.dataset.aid === aid) tr.classList.toggle("collapsed", collapsed);
-  });
+  const vars = head.parentElement.querySelector(".sart-vars");
+  if (vars) vars.classList.toggle("collapsed", collapsed);
 }
 
 // Per-row editing: a Save button appears on a row only when its price or qty
 // differs from what was loaded, and saves just that one variant on tap.
 function stockRowDirty(inp) {
-  const tr = inp.closest("tr[data-id]"); if (!tr) return;
+  const tr = inp.closest("[data-id]"); if (!tr) return;
   const pEl = tr.querySelector(".price-in"), qEl = tr.querySelector(".qty-in"), btn = tr.querySelector(".row-save");
   if (!btn) return;
   const changed = (pEl.value !== (pEl.dataset.orig || "")) || (qEl.value !== (qEl.dataset.orig || ""));
   btn.style.display = changed ? "inline-flex" : "none";
 }
 async function saveRow(btn) {
-  const tr = btn.closest("tr[data-id]"); if (!tr) return;
+  const tr = btn.closest("[data-id]"); if (!tr) return;
   const id = tr.dataset.id, aid = tr.dataset.aid;
   const pEl = tr.querySelector(".price-in"), qEl = tr.querySelector(".qty-in"), aEl = tr.querySelector(".act-in");
   const price = pEl.value.trim() !== "" ? Number(pEl.value) : null;
@@ -432,7 +432,7 @@ async function saveRow(btn) {
 // (along with its current qty/price shown in the row) and refreshes the Live badge,
 // without touching other rows' unsaved edits or requiring "Save changes".
 async function toggleStockLive(cb) {
-  const tr = cb.closest("tr[data-id]");
+  const tr = cb.closest("[data-id]");
   if (!tr) return;
   const vid = tr.dataset.id, aid = tr.dataset.aid;
   const qEl = tr.querySelector(".qty-in"), pEl = tr.querySelector(".price-in");
@@ -455,15 +455,15 @@ function refreshArticleLive(aid) {
   const a = ARTICLES.find(x => x.id === aid);
   if (!a) return;
   const info = stockLiveInfo(a);
-  // Variant rows get the dimmed style; the header row (.art-head) carries the badge/reason.
-  document.querySelectorAll("#stockTable tr.art-var").forEach(tr => {
-    if (tr.dataset.aid === String(aid)) tr.classList.toggle("row-notlive-soft", !info.live);
+  // Variant cards get the dimmed style; the header carries the badge/reason.
+  document.querySelectorAll("#stockTable .svar").forEach(row => {
+    if (row.dataset.aid === String(aid)) row.classList.toggle("row-notlive-soft", !info.live);
   });
-  const head = [...document.querySelectorAll("#stockTable tr.art-head")].find(tr => tr.dataset.aid === String(aid));
+  const head = [...document.querySelectorAll("#stockTable .sart-head")].find(h => h.dataset.aid === String(aid));
   if (!head) return;
   const badge = head.querySelector(".stock-badge");
   if (badge) { badge.className = "stock-badge " + (info.live ? "live-badge" : "notlive-badge"); badge.textContent = info.live ? "● Live" : "Not live"; }
-  const host = head.querySelector(".art-head-txt") || head.querySelector("td");
+  const host = head.querySelector(".sart-info") || head;
   let reason = host.querySelector(".notlive-reason");
   if (!info.live && info.reason) {
     if (!reason) { reason = document.createElement("div"); reason.className = "notlive-reason"; host.appendChild(reason); }
@@ -805,6 +805,9 @@ function wzFinish() {
 // ---- edit modal ----
 function openEditModal(aid) {
   EDIT_MODAL_AID = aid;
+  const a = ARTICLES.find(x => x.id === aid);
+  try { const r = JSON.parse((a && a.related_ids) || "[]"); EM_RELATED = Array.isArray(r) ? r.filter(Boolean) : []; }
+  catch (e) { EM_RELATED = []; }
   document.getElementById("editModal").style.display = "block";
   document.body.style.overflow = "hidden";
   refreshEditModal();
@@ -882,6 +885,12 @@ function buildEditModalHTML(a) {
       '</div>' +
     '</section>' +
 
+    // ── You may also like (curated recommendations) ──
+    '<section class="ev-card">' +
+      '<div class="ev-card-title">You may also like <span class="ev-card-note">shown on this product\'s page — pick a few to recommend</span></div>' +
+      '<div id="ev-rel-' + a.id + '">' + relatedEditorHTML(a) + '</div>' +
+    '</section>' +
+
     // ── Photos (auto-saved) ──
     '<section class="ev-card">' +
       '<div class="ev-card-title">Photos <span class="ev-card-note">added &amp; removed instantly</span></div>' +
@@ -910,6 +919,7 @@ async function saveEditModal(aid) {
     description: (document.getElementById("edd_" + aid) || {}).value?.trim() || "",
     is_active: 1, // visibility is driven by the per-colour Live toggle, not here
     is_new_arrival: !!(document.getElementById("ena_" + aid) || {}).checked,
+    related_ids: EM_RELATED,
   };
   if (!body.article_code || !body.category) return toast("Article code and category are required");
   const a = ARTICLES.find(x => x.id === aid) || {};
@@ -957,6 +967,65 @@ function emHideAddForm(aid) {
   const btn = document.getElementById("emAddBtn_" + aid), form = document.getElementById("emAddForm_" + aid);
   if (btn) btn.style.display = "inline-flex";
   if (form) form.style.display = "none";
+}
+
+// "You may also like" editor — reads/writes the module-level EM_RELATED list,
+// saved with the rest of the article on "Save changes".
+function relThumbHTML(x) {
+  const url = (x.photos && x.photos[0]) ? x.photos[0].url : "";
+  return url
+    ? '<img class="rel-thumb" src="' + esc(url) + '" alt="" loading="lazy">'
+    : '<span class="rel-thumb rel-thumb-empty"></span>';
+}
+function relatedEditorHTML(a) {
+  const chosen = EM_RELATED.map(id => ARTICLES.find(x => x.id === id)).filter(Boolean);
+  const chips = chosen.length
+    ? '<div class="rel-chips">' + chosen.map(r =>
+        '<span class="rel-chip">' + relThumbHTML(r) + '<span class="rel-chip-name">' + esc(r.name || r.article_code) + '</span>' +
+        '<button type="button" title="Remove" onclick="removeRelated(' + jq(r.id) + ')">✕</button></span>'
+      ).join('') + '</div>'
+    : '<p class="muted" style="font-size:12.5px;margin:0 0 10px">None yet — search below to add.</p>';
+  return chips +
+    '<div class="rel-search-wrap">' +
+      '<input id="rel-search-' + a.id + '" class="rel-search" autocomplete="off" placeholder="Search products to recommend…" oninput="relSearch(' + jq(a.id) + ')">' +
+      '<div class="rel-results" id="rel-results-' + a.id + '" style="display:none"></div>' +
+    '</div>';
+}
+// Live search over all products, shown with a tiny thumbnail so the admin can spot
+// the right one at a glance instead of scrolling a long dropdown.
+function relSearch(aid) {
+  const inp = document.getElementById("rel-search-" + aid);
+  const box = document.getElementById("rel-results-" + aid);
+  if (!inp || !box) return;
+  const q = (inp.value || "").trim().toLowerCase();
+  if (!q) { box.innerHTML = ""; box.style.display = "none"; return; }
+  const matches = ARTICLES.filter(x =>
+    x.id !== aid && !EM_RELATED.includes(x.id) &&
+    ((x.name || "").toLowerCase().includes(q) || (x.article_code || "").toLowerCase().includes(q) || (x.category || "").toLowerCase().includes(q))
+  ).slice(0, 8);
+  box.innerHTML = matches.length
+    ? matches.map(x =>
+        '<div class="rel-result" onclick="addRelated(' + jq(aid) + ', ' + jq(x.id) + ')">' +
+          relThumbHTML(x) +
+          '<div class="rel-result-txt"><div class="rel-result-name">' + esc(x.name || x.article_code) + '</div>' +
+          '<div class="rel-result-sub">' + esc(x.article_code) + (x.category ? ' · ' + esc(x.category) : '') + '</div></div>' +
+        '</div>'
+      ).join("")
+    : '<div class="rel-empty">No matches</div>';
+  box.style.display = "block";
+}
+function renderRelatedEditor(aid) {
+  const host = document.getElementById("ev-rel-" + aid);
+  const a = ARTICLES.find(x => x.id === aid);
+  if (host && a) host.innerHTML = relatedEditorHTML(a);
+}
+function addRelated(aid, rid) {
+  if (rid && !EM_RELATED.includes(rid)) EM_RELATED.push(rid);
+  renderRelatedEditor(aid); // rebuild — clears the search box + results
+}
+function removeRelated(rid) {
+  EM_RELATED = EM_RELATED.filter(x => x !== rid);
+  renderRelatedEditor(EDIT_MODAL_AID);
 }
 async function delVariant(id) {
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(id), { method: "DELETE" });

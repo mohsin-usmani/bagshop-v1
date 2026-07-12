@@ -5,12 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>FinEx — Catalogue</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%233b4cca'/%3E%3Ctext x='50' y='69' text-anchor='middle' fill='white' font-family='Arial%2Csans-serif' font-weight='700' font-style='italic' font-size='50'%3EFx%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="/assets/styles.css?v=24">
+<link rel="stylesheet" href="/assets/styles.css?v=39">
 </head>
 <body>
 
 <!-- ── NAVBAR ── -->
 <nav class="navbar" id="navbar">
+  <!-- Desktop-only: single row, Myntra-style — logo, admin's categories inline,
+       a compact always-visible search box, then history/cart. Mobile keeps the
+       two-row nav-top + hamburger menu below untouched. -->
+  <div class="navbar-desktop" id="navbarDesktop">
+    <a class="nav-logo-link" href="#" onclick="goHome();return false">
+      <svg class="nav-logo-svg" viewBox="0 0 172 60" xmlns="http://www.w3.org/2000/svg" aria-label="FinEx" style="color:#e8202a">
+        <text x="0" y="46" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="50" letter-spacing="-1.5" fill="currentColor">FinEx</text>
+      </svg>
+      <span class="nav-shopname" id="navdShopName"></span>
+    </a>
+    <div class="navd-cats" id="navdCatsBar"></div>
+    <div class="navd-search">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="navdSearchInput" placeholder="Search…" oninput="onSearchInput(this.value)" autocomplete="off">
+    </div>
+    <div class="navd-icons">
+      <button class="nav-icon-btn" onclick="openHistory()" aria-label="My orders" title="My past orders">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+      <button class="nav-icon-btn nav-cart-btn" onclick="openCart()" aria-label="Cart">
+        <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="nav-cart-badge" id="navdCartBadge" style="display:none">0</span>
+      </button>
+    </div>
+  </div>
   <div class="nav-top">
     <div class="nav-left">
       <button class="nav-icon-btn" id="searchToggleBtn" onclick="toggleNavSearch()" aria-label="Search">
@@ -136,7 +161,7 @@
   </div>
 </div>
 
-<script src="/assets/common.js?v=24"></script>
-<script src="/assets/catalog.js?v=24"></script>
+<script src="/assets/common.js?v=33"></script>
+<script src="/assets/catalog.js?v=37"></script>
 </body>
 </html>

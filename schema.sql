@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS articles (
   base_price     REAL,
   is_active      INTEGER NOT NULL DEFAULT 1,
   is_new_arrival INTEGER NOT NULL DEFAULT 0,
+  related_ids    TEXT,             -- JSON array of article ids for "You may also like"
   created_at     INTEGER NOT NULL
 );
 

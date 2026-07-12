@@ -49,6 +49,12 @@ export async function onRequestPatch(context) {
   await env.DB.prepare(
     "UPDATE articles SET article_code=?, name=?, category=?, description=?, base_price=?, is_active=?, is_new_arrival=? WHERE id=?"
   ).bind(b.article_code, b.name, b.category, b.description, b.base_price ?? null, b.is_active ? 1 : 0, b.is_new_arrival ? 1 : 0, b.id).run();
+  // "You may also like" picks — only touched when provided. Wrapped so a DB missing
+  // the related_ids column (pre-migration) still saves the rest of the article.
+  if (b.related_ids !== undefined) {
+    const rel = JSON.stringify(Array.isArray(b.related_ids) ? b.related_ids : []);
+    try { await env.DB.prepare("UPDATE articles SET related_ids=? WHERE id=?").bind(rel, b.id).run(); } catch (e) {}
+  }
   return json({ ok: true });
 }
 

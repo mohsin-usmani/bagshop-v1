@@ -58,7 +58,15 @@
       "Bash(cat wrangler.toml)",
       "Bash(npx wrangler *)",
       "Bash(ls .claude)",
-      "Bash(cat .claude/launch.json)"
+      "Bash(cat .claude/launch.json)",
+      "Bash(curl -s http://127.0.0.1:8791/api/catalog?token=testtoken123 -o C:/Users/sw/AppData/Local/Temp/claude/C--Users-sw-Desktop-bag-bagshop-v1-bagshop-v1/7bcff4c0-c75c-4dc3-b2cb-c892ee41e528/scratchpad/cat.json)",
+      "Bash(node -e 'const fs=require\\('\\\\''fs'\\\\''\\);const d=JSON.parse\\(fs.readFileSync\\(process.argv[1],'\\\\''utf8'\\\\''\\)\\);console.log\\('\\\\''articles:'\\\\'',d.articles.length\\);const cats={};d.articles.forEach\\(a=>cats[a.category]=\\(cats[a.category]||0\\)+1\\);console.log\\('\\\\''categories:'\\\\'',JSON.stringify\\(cats\\)\\);console.log\\('\\\\''hasRelatedField:'\\\\'', '\\\\''related_ids'\\\\'' in \\(d.articles[0]||{}\\)\\);console.log\\('\\\\''sample:'\\\\'', d.articles[0].id, d.articles[0].name, '\\\\''| desc:'\\\\'', \\(d.articles[0].description||'\\\\'''\\\\''\\).slice\\(0,30\\)\\);' C:/Users/sw/AppData/Local/Temp/claude/C--Users-sw-Desktop-bag-bagshop-v1-bagshop-v1/7bcff4c0-c75c-4dc3-b2cb-c892ee41e528/scratchpad/cat.json)",
+      "Bash(node -e 'const fs=require\\('\\\\''fs'\\\\''\\);const d=JSON.parse\\(fs.readFileSync\\(process.argv[1],'\\\\''utf8'\\\\''\\)\\);const bp=d.articles.filter\\(a=>a.category==='\\\\''Backpacks'\\\\''\\);console.log\\(JSON.stringify\\(bp.map\\(a=>\\({id:a.id,name:a.name}\\)\\)\\)\\);' C:/Users/sw/AppData/Local/Temp/claude/C--Users-sw-Desktop-bag-bagshop-v1-bagshop-v1/7bcff4c0-c75c-4dc3-b2cb-c892ee41e528/scratchpad/cat.json)",
+      "Bash(curl -s -X PATCH http://127.0.0.1:8791/api/admin/articles -H 'content-type: application/json' -d '{\"id\":\"bp1\",\"article_code\":\"PRO-DLX-6\",\"name\":\"PRO-DLX 6 Backpack 15.6\\\\\" 3Vol Exp\",\"category\":\"Backpacks\",\"description\":\"Premium business backpack\",\"base_price\":590,\"is_active\":1,\"is_new_arrival\":0,\"related_ids\":[\"bp2\",\"bp3\",\"bp4\",\"ac1\"]}' -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s http://127.0.0.1:8791/api/catalog?token=testtoken123 -o C:/Users/sw/AppData/Local/Temp/claude/C--Users-sw-Desktop-bag-bagshop-v1-bagshop-v1/7bcff4c0-c75c-4dc3-b2cb-c892ee41e528/scratchpad/cat2.json)",
+      "Bash(node -e 'const fs=require\\('\\\\''fs'\\\\''\\);const d=JSON.parse\\(fs.readFileSync\\(process.argv[1],'\\\\''utf8'\\\\''\\)\\);const a=d.articles.find\\(x=>x.id==='\\\\''bp1'\\\\''\\);console.log\\('\\\\''bp1.related_ids ='\\\\'', a.related_ids\\);' C:/Users/sw/AppData/Local/Temp/claude/C--Users-sw-Desktop-bag-bagshop-v1-bagshop-v1/7bcff4c0-c75c-4dc3-b2cb-c892ee41e528/scratchpad/cat2.json)",
+      "Bash(curl -s \"http://127.0.0.1:8791/product?id=bp1&t=testtoken123\")",
+      "Bash(grep -c \"addToCart\\(aid\\);\\\\s*$\\\\|openCart\\(\\); // go straight\")"
     ]
   }
 }

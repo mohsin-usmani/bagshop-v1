@@ -58,9 +58,20 @@ function saveCart() {
 function loadCart() {
   try {
     const raw = localStorage.getItem('bag_cart_' + TOKEN);
-    if (raw) { const c = JSON.parse(raw); Object.assign(CART, c); }
+    Object.keys(CART).forEach(k => delete CART[k]); // full resync, not merge — see pageshow handler below
+    if (raw) Object.assign(CART, JSON.parse(raw));
   } catch(e) {}
 }
+// Mobile back gestures/buttons (goBack() uses history.back()) often restore
+// the page from the browser's back-forward cache (bfcache) instead of
+// reloading it — init() never re-runs, so a cart change made on another page
+// never shows up here unless we explicitly resync from storage.
+window.addEventListener('pageshow', e => {
+  if (!e.persisted || !ARTICLE) return;
+  loadCart();
+  renderNav();
+  renderCart();
+});
 
 // ── Init ──
 async function init() {
@@ -89,6 +100,7 @@ async function init() {
   renderNav();
   renderBreadcrumb();
   renderPDP();
+  renderExtras();
   renderCart();
 }
 
@@ -130,13 +142,15 @@ function goCatalogCat(cat) {
 // (e.g. link opened directly inside WhatsApp's in-app browser).
 function goHome() { goCatalogCat(''); }
 
-// Back arrow / breadcrumb → prefer a real back step so the customer keeps their
-// place in the listing, but fall back to the catalogue home when there is no
-// same-site history to go back to (otherwise the button would do nothing).
+// Back arrow / breadcrumb → prefer a real back step so the customer returns to
+// where they came from — the catalogue listing OR the previous product (when they
+// arrived here via "You may also like" / "Similar products"). Falls back to the
+// catalogue home only when there's no same-site history to go back to.
 function goBack() {
   const ref = document.referrer || '';
-  const cameFromCatalogue = ref.indexOf(location.origin) === 0 && ref.indexOf('/s.html') !== -1;
-  if (cameFromCatalogue && window.history.length > 1) history.back();
+  const sameSite = ref.indexOf(location.origin) === 0 &&
+    (ref.indexOf('/s.html') !== -1 || ref.indexOf('/s?') !== -1 || ref.indexOf('/product') !== -1);
+  if (sameSite && window.history.length > 1) history.back();
   else goHome();
 }
 
@@ -154,7 +168,95 @@ function renderBreadcrumb() {
 function renderPDP() {
   document.title = (ARTICLE.name || ARTICLE.article_code) + ' — FinEx';
   document.getElementById('pdpApp').innerHTML = pdpHTML();
-  document.getElementById('pdpApp').style.paddingBottom = '80px';
+  document.getElementById('pdpApp').style.paddingBottom = '24px';
+  Z.scale = 1; Z.x = 0; Z.y = 0; // fresh gallery markup is already unzoomed — keep state in sync
+  // The old (possibly fullscreen-zoomed) wrap was just replaced, so its zoom
+  // popup is gone too — release the scroll lock unless the cart drawer (which
+  // also locks scroll) is the one holding it open.
+  const drawer = document.getElementById('drawer');
+  if (!drawer || !drawer.classList.contains('open')) document.body.style.overflow = '';
+}
+
+// ── Below the product: "You may also like" + "Similar products" ──
+// Rendered once (separate from pdpApp) so switching colour doesn't reset them.
+function renderExtras() {
+  const el = document.getElementById('pdpExtras');
+  if (!el) return;
+  el.innerHTML = (ARTICLE && DATA) ? (youMayLikeHTML() + similarProductsHTML()) : '';
+}
+function articleMinPrice(a) {
+  let mp = null;
+  (a.variants || []).forEach(v => { const p = v.price != null ? v.price : a.base_price; if (p != null && (mp == null || p < mp)) mp = p; });
+  return mp != null ? mp : a.base_price;
+}
+function recCard(a) {
+  const img = cartPhotoFor(a, null);
+  const mp = articleMinPrice(a);
+  // rec-desc is always rendered (even empty) so every card in a row reserves
+  // the same content height — some mobile browsers don't reliably stretch
+  // flex children in a horizontally-scrolling row, so the ATC button would
+  // otherwise land at a different height on cards missing a description.
+  return '<div class="rec-card" onclick="openProductNav(\'' + jq(a.id) + '\')">' +
+    '<div class="rec-img"><img src="' + esc(img) + '" alt="" loading="lazy"></div>' +
+    '<div class="rec-body">' +
+      '<div class="rec-name">' + esc(a.name || a.article_code) + '</div>' +
+      '<div class="rec-desc">' + esc(a.description || '') + '</div>' +
+      (SHOW_PRICES && mp != null ? '<div class="rec-price">' + esc(CUR) + ' ' + mp + '/pc</div>' : '') +
+    '</div>' +
+    '<button class="btn-atc" onclick="event.stopPropagation();quickAddRec(\'' + jq(a.id) + '\')">ADD TO CART</button>' +
+  '</div>';
+}
+
+// Quick-add from "You may also like" / "Similar products" cards — adds the
+// first colour/size variant straight to the cart without opening the product
+// page, so the customer never leaves the page they're on.
+function quickAddRec(aid) {
+  const a = DATA.articles.find(x => String(x.id) === String(aid));
+  if (!a) return;
+  const color = ((a.variants || [])[0] || {}).color || '';
+  const colVars = a.variants.filter(v => v.color === color);
+  const v = colVars.find(v => v.available_qty > 0) || colVars[0];
+  if (!v || v.available_qty <= 0) return toast('Out of stock');
+  const price = v.price != null ? v.price : a.base_price;
+  const label = a.article_code + ' ' + color + (v.size ? ' ' + v.size : '');
+  if (CART[v.id]) CART[v.id].qty = Math.min(CART[v.id].qty + 1, v.available_qty);
+  else CART[v.id] = { qty: 1, label, price };
+  saveCart();
+  toast('Added to cart ✓');
+  renderCart();
+}
+function youMayLikeHTML() {
+  let ids = [];
+  try { ids = JSON.parse(ARTICLE.related_ids || '[]'); } catch (e) { ids = []; }
+  if (!Array.isArray(ids)) ids = [];
+  const recs = ids.map(id => DATA.articles.find(a => String(a.id) === String(id)))
+    .filter(a => a && String(a.id) !== String(ARTICLE.id));
+  if (!recs.length) return '';
+  return '<section class="rec-sec">' +
+    '<h2 class="rec-title">You may also like</h2>' +
+    '<div class="rec-row-wrap">' +
+      '<button class="rec-arr prev" onclick="recScroll(-1)">&#8249;</button>' +
+      '<div class="rec-row" id="recRow">' + recs.map(recCard).join('') + '</div>' +
+      '<button class="rec-arr next" onclick="recScroll(1)">&#8250;</button>' +
+    '</div>' +
+  '</section>';
+}
+function similarProductsHTML() {
+  if (!ARTICLE.category) return '';
+  const sims = DATA.articles.filter(a => a.category === ARTICLE.category && String(a.id) !== String(ARTICLE.id));
+  if (!sims.length) return '';
+  return '<section class="rec-sec">' +
+    '<h2 class="rec-title">Similar products</h2>' +
+    '<div class="rec-grid">' + sims.map(recCard).join('') + '</div>' +
+  '</section>';
+}
+function recScroll(dir) {
+  const row = document.getElementById('recRow'); if (!row) return;
+  row.scrollBy({ left: dir * row.clientWidth * 0.8, behavior: 'smooth' });
+}
+function openProductNav(id) {
+  if (String(id) === String(PRODUCT_ID)) { window.scrollTo(0, 0); return; }
+  window.location.href = '/product.html?id=' + encodeURIComponent(id) + '&t=' + encodeURIComponent(TOKEN);
 }
 
 function pdpHTML() {
@@ -177,9 +279,19 @@ function pdpHTML() {
   const totalAvail = colVars.reduce((n, v) => n + (v.available_qty || 0), 0);
   const inStock = totalAvail > 0;
 
-  // Gallery HTML
+  // Gallery HTML — all photos sit side by side in a sliding track so switching
+  // photos animates smoothly instead of hard-cutting. Pinch/hold-to-zoom
+  // happens right here in place (see the pointer handlers below). Tapping the
+  // photo expands #pdpMainWrap into a fullscreen popup (via a CSS class, not a
+  // separate element) so the exact same track/zoom code drives both views.
   const mainImg = photos.length
-    ? '<img class="pdp-main-img" id="pdpMainImg" src="' + esc(photos[idx].url) + '" alt="' + esc(a.name || '') + '" onclick="openLightbox(' + idx + ')">'
+    ? '<div class="pdp-slide-track" id="pdpSlideTrack" style="transform:translateX(-' + (idx * 100) + '%)">' +
+        photos.map(p =>
+          '<div class="pdp-slide"><img class="pdp-slide-img" src="' + esc(p.url) + '" alt="' + esc(a.name || '') + '" draggable="false"></div>'
+        ).join('') +
+      '</div>' +
+      '<button class="pdp-zoom-close" onclick="event.stopPropagation();closeZoomView()" aria-label="Close">&#10005;</button>' +
+      '<div class="pdp-zoom-counter" id="pdpZoomCounter">' + (idx + 1) + ' / ' + photos.length + '</div>'
     : '<div class="no-photo" style="height:100%">No photo</div>';
 
   const thumbsHTML = photos.length > 1
@@ -191,8 +303,8 @@ function pdpHTML() {
     : '';
 
   const arrowsHTML = photos.length > 1
-    ? '<button class="pdp-arr prev" onclick="prevPhoto()">&#8249;</button>' +
-      '<button class="pdp-arr next" onclick="nextPhoto()">&#8250;</button>'
+    ? '<button class="pdp-arr prev" id="pdpArrPrev" onclick="prevPhoto()" style="visibility:' + (idx > 0 ? 'visible' : 'hidden') + '">&#8249;</button>' +
+      '<button class="pdp-arr next" id="pdpArrNext" onclick="nextPhoto()" style="visibility:' + (idx < photos.length - 1 ? 'visible' : 'hidden') + '">&#8250;</button>'
     : '';
 
   // Colour selector — shows a photo of each colour (Flipkart/Amazon style),
@@ -303,17 +415,24 @@ function pdpHTML() {
 function goPhoto(i) {
   const photos = resolvePhotos(SEL.color);
   PHOTO_IDX = Math.max(0, Math.min(i, photos.length - 1));
-  const img = document.getElementById('pdpMainImg');
-  if (img) img.src = photos[PHOTO_IDX].url;
+  const track = document.getElementById('pdpSlideTrack');
+  if (track) { track.classList.remove('dragging'); track.style.transform = 'translateX(-' + (PHOTO_IDX * 100) + '%)'; }
   document.querySelectorAll('.pdp-thumb').forEach((t, j) => t.classList.toggle('on', j === PHOTO_IDX));
+  const prevArr = document.getElementById('pdpArrPrev'), nextArr = document.getElementById('pdpArrNext');
+  if (prevArr) prevArr.style.visibility = PHOTO_IDX > 0 ? 'visible' : 'hidden';
+  if (nextArr) nextArr.style.visibility = PHOTO_IDX < photos.length - 1 ? 'visible' : 'hidden';
+  const counter = document.getElementById('pdpZoomCounter');
+  if (counter) counter.textContent = (PHOTO_IDX + 1) + ' / ' + photos.length;
+  resetZoom();
 }
 function prevPhoto() {
-  const photos = resolvePhotos(SEL.color);
-  goPhoto((PHOTO_IDX - 1 + photos.length) % photos.length);
+  if (PHOTO_IDX <= 0) return; // already at the first photo — don't wrap
+  goPhoto(PHOTO_IDX - 1);
 }
 function nextPhoto() {
   const photos = resolvePhotos(SEL.color);
-  goPhoto((PHOTO_IDX + 1) % photos.length);
+  if (PHOTO_IDX >= photos.length - 1) return; // already at the last photo — don't wrap
+  goPhoto(PHOTO_IDX + 1);
 }
 
 // ── Selections ──
@@ -384,18 +503,125 @@ function renderCart() {
   const ids = Object.keys(CART);
   const count = ids.reduce((n, id) => n + CART[id].qty, 0);
   document.getElementById('cartbar').style.display = ids.length ? 'block' : 'none';
+  document.body.classList.toggle('has-cartbar', ids.length > 0);
   document.getElementById('cartCount').textContent = count;
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
   let total = 0;
   document.getElementById('cartLines').innerHTML = ids.map(id => {
-    const c = CART[id]; total += (c.price || 0) * c.qty;
-    return '<div class="line"><div style="flex:1">' + esc(c.label) + ' <span class="muted">× ' + c.qty + '</span></div>' +
-      (SHOW_PRICES ? '<div class="muted">' + esc(CUR) + (c.price * c.qty) + '</div>' : '') +
-      '<span class="x" onclick="removeItem(\'' + jq(id) + '\')">✕</span></div>';
+    total += (CART[id].price || 0) * CART[id].qty;
+    return cartLineHTML(id, CART[id]);
   }).join('') || '<p class="muted">Cart is empty.</p>';
   document.getElementById('cartTotal').innerHTML = SHOW_PRICES && ids.length ? 'Est. total: <strong>' + esc(CUR) + total + '</strong>' : '';
 }
+
+// Look up the article + variant behind a cart line (cart is keyed by variant id).
+function cartVariant(id) {
+  if (!DATA) return null;
+  for (const a of DATA.articles) {
+    const v = (a.variants || []).find(x => x.id === id);
+    if (v) return { a, v };
+  }
+  return null;
+}
+function cartPhotoFor(a, color) {
+  const all = a.photos || [];
+  const forC = color ? all.filter(p => p.color === color) : all;
+  if (forC.length) return forC[0].url;
+  if (all.length) return all[0].url;
+  return getPlaceholder(a);
+}
+
+function cartLineHTML(id, c) {
+  const jid = jq(id);
+  const cv = cartVariant(id);
+  if (!cv) {
+    return '<div class="citem"><div class="citem-body"><div class="citem-top">' +
+      '<div class="citem-name">' + esc(c.label || 'Item') + ' <span class="muted">× ' + c.qty + '</span></div>' +
+      '<button class="citem-x" onclick="removeItem(\'' + jid + '\')">✕</button>' +
+    '</div></div></div>';
+  }
+  const a = cv.a, v = cv.v;
+  const img = cartPhotoFor(a, v.color);
+  const colours = [...new Set(a.variants.map(x => x.color).filter(Boolean))];
+  const sizesForColour = a.variants.filter(x => x.color === v.color && x.size && x.size.trim());
+  const lineTotal = (c.price || 0) * c.qty;
+
+  const colourSel = colours.length > 1
+    ? '<label>Colour<select onchange="changeCartColour(\'' + jid + '\', this.value)">' +
+        colours.map(col => '<option' + (col === v.color ? ' selected' : '') + '>' + esc(col) + '</option>').join('') +
+      '</select></label>'
+    : (v.color ? '<label>Colour<select disabled><option>' + esc(v.color) + '</option></select></label>' : '');
+
+  const sizeSel = sizesForColour.length
+    ? '<label>Size<select onchange="changeCartSize(\'' + jid + '\', this.value)">' +
+        sizesForColour.map(sv => '<option' + (sv.size === v.size ? ' selected' : '') + (sv.available_qty <= 0 ? ' disabled' : '') + '>' + esc(sv.size) + '</option>').join('') +
+      '</select></label>'
+    : '';
+
+  return '<div class="citem">' +
+    '<div class="citem-img" onclick="openCartProduct(\'' + jid + '\')"><img src="' + esc(img) + '" alt=""></div>' +
+    '<div class="citem-body">' +
+      '<div class="citem-top">' +
+        '<div class="citem-name" onclick="openCartProduct(\'' + jid + '\')">' + esc(a.name || a.article_code) + '</div>' +
+        '<button class="citem-x" title="Remove" onclick="removeItem(\'' + jid + '\')">✕</button>' +
+      '</div>' +
+      '<div class="citem-opts">' + colourSel + sizeSel + '</div>' +
+      '<div class="citem-bottom">' +
+        '<div class="citem-stepper">' +
+          '<button onclick="cartQtyDelta(\'' + jid + '\',-1)">−</button>' +
+          '<span>' + c.qty + '</span>' +
+          '<button onclick="cartQtyDelta(\'' + jid + '\',1)">+</button>' +
+        '</div>' +
+        (SHOW_PRICES ? '<div class="citem-price">' + esc(CUR) + ' ' + lineTotal + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function cartQtyDelta(id, d) {
+  if (!CART[id]) return;
+  const cv = cartVariant(id);
+  const max = cv ? (cv.v.available_qty || 1) : CART[id].qty;
+  let q = (CART[id].qty || 1) + d;
+  if (q < 1) q = 1;
+  if (q > max) { q = max; toast('Only ' + max + ' in stock'); }
+  CART[id].qty = q;
+  saveCart(); renderCart(); renderPDP();
+}
+function moveCartVariant(oldId, nv, a) {
+  if (!nv || nv.id === oldId) return;
+  const oldQty = (CART[oldId] && CART[oldId].qty) || 1;
+  const price = nv.price != null ? nv.price : a.base_price;
+  const label = a.article_code + ' ' + nv.color + (nv.size ? ' ' + nv.size : '');
+  const want = Math.min(oldQty, nv.available_qty || 1) || 1;
+  if (CART[nv.id]) CART[nv.id].qty = Math.min(CART[nv.id].qty + want, nv.available_qty || want);
+  else CART[nv.id] = { qty: want, label, price };
+  delete CART[oldId];
+  saveCart(); renderCart(); renderPDP();
+}
+function changeCartColour(id, colour) {
+  const cv = cartVariant(id); if (!cv) return;
+  const colVars = cv.a.variants.filter(x => x.color === colour);
+  const nv = colVars.find(x => x.size === cv.v.size && x.available_qty > 0)
+    || colVars.find(x => x.available_qty > 0) || colVars[0];
+  if (!nv) return toast('That colour is unavailable');
+  moveCartVariant(id, nv, cv.a);
+}
+function changeCartSize(id, size) {
+  const cv = cartVariant(id); if (!cv) return;
+  const nv = cv.a.variants.find(x => x.color === cv.v.color && x.size === size);
+  if (!nv) return;
+  if (nv.available_qty <= 0) return toast('That size is sold out');
+  moveCartVariant(id, nv, cv.a);
+}
+function openCartProduct(id) {
+  const cv = cartVariant(id); if (!cv) return;
+  closeCart();
+  if (String(cv.a.id) === String(PRODUCT_ID)) { window.scrollTo(0, 0); return; }
+  window.location.href = '/product.html?id=' + encodeURIComponent(cv.a.id) + '&t=' + encodeURIComponent(TOKEN);
+}
+
 function removeItem(id) {
   delete CART[id]; saveCart(); renderCart(); renderPDP();
 }
@@ -414,154 +640,124 @@ async function sendOrder() {
   else toast('Could not send. Please try again.');
 }
 
-// ── Touch swipe ──
-(function() {
-  let sx = 0;
-  document.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
-  document.addEventListener('touchend', e => {
-    const wrap = e.target.closest('.pdp-main-wrap');
-    if (!wrap) return;
-    const dx = e.changedTouches[0].clientX - sx;
-    if (Math.abs(dx) > 40) { if (dx < 0) nextPhoto(); else prevPhoto(); }
-  }, { passive: true });
-})();
+// ── Inline photo zoom + smooth slide (pinch / hold-to-zoom right where the
+// photo sits) + fullscreen popup, driven by the exact same track/zoom code —
+// opening the popup just expands #pdpMainWrap over the whole screen via CSS. ──
+const Z = { scale: 1, x: 0, y: 0, pointers: new Map(), startDist: 0, startScale: 1, panStart: null };
+const MAX_ZOOM = 3;
 
-// ── Fullscreen pinch-to-zoom lightbox ──
-const LB = { idx: 0, scale: 1, x: 0, y: 0, pointers: new Map(), startDist: 0, startScale: 1, startMid: null, panStart: null, lastTapTime: 0, lastTapX: 0 };
-const MAX_SCALE = 4;
-
-function lbPhotos() { return resolvePhotos(SEL.color); }
-
-function openLightbox(i) {
-  const photos = lbPhotos();
-  if (!photos.length) return;
-  LB.idx = Math.max(0, Math.min(i, photos.length - 1));
-  resetLbTransform();
-  document.getElementById('pdpLightbox').classList.add('open');
+function openZoomView() {
+  const wrap = document.getElementById('pdpMainWrap');
+  if (!wrap || wrap.classList.contains('pdp-zoom-open')) return;
+  wrap.classList.add('pdp-zoom-open');
   document.body.style.overflow = 'hidden';
-  renderLbImage();
 }
-function closeLightbox() {
-  document.getElementById('pdpLightbox').classList.remove('open');
+function closeZoomView() {
+  const wrap = document.getElementById('pdpMainWrap');
+  if (!wrap || !wrap.classList.contains('pdp-zoom-open')) return;
+  wrap.classList.remove('pdp-zoom-open');
   document.body.style.overflow = '';
-  LB.pointers.clear();
+  resetZoom();
 }
-function renderLbImage() {
-  const photos = lbPhotos();
-  const img = document.getElementById('pdpLbImg');
-  img.src = photos[LB.idx].url;
-  const counter = document.getElementById('pdpLbCounter');
-  counter.textContent = photos.length > 1 ? (LB.idx + 1) + ' / ' + photos.length : '';
-  const prevBtn = document.getElementById('pdpLbPrev'), nextBtn = document.getElementById('pdpLbNext');
-  const show = photos.length > 1 ? 'flex' : 'none';
-  prevBtn.style.display = show; nextBtn.style.display = show;
-}
-function resetLbTransform() {
-  LB.scale = 1; LB.x = 0; LB.y = 0;
-  applyLbTransform();
-}
-function applyLbTransform() {
-  const img = document.getElementById('pdpLbImg');
-  if (img) img.style.transform = 'translate(' + LB.x + 'px,' + LB.y + 'px) scale(' + LB.scale + ')';
-}
-function lbPrev() {
-  if (LB.scale > 1.01) return;
-  const photos = lbPhotos();
-  LB.idx = (LB.idx - 1 + photos.length) % photos.length;
-  resetLbTransform(); renderLbImage();
-}
-function lbNext() {
-  if (LB.scale > 1.01) return;
-  const photos = lbPhotos();
-  LB.idx = (LB.idx + 1) % photos.length;
-  resetLbTransform(); renderLbImage();
+function toggleZoomView() {
+  const wrap = document.getElementById('pdpMainWrap');
+  if (wrap && wrap.classList.contains('pdp-zoom-open')) closeZoomView(); else openZoomView();
 }
 
-function lbDist(pts) {
+function activeSlideImg() {
+  const track = document.getElementById('pdpSlideTrack');
+  const slide = track && track.children[PHOTO_IDX];
+  return slide ? slide.querySelector('img') : null;
+}
+function resetZoom() {
+  Z.scale = 1; Z.x = 0; Z.y = 0;
+  applyZoom(true);
+}
+// smooth=true animates the jump (double-tap / reset); pinch & pan track the
+// finger 1:1 so they skip the transition to stay responsive.
+function applyZoom(smooth) {
+  const img = activeSlideImg();
+  if (!img) return;
+  img.classList.toggle('zoom-anim', !!smooth);
+  img.style.transform = 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.scale + ')';
+}
+function zDist(pts) {
   const [a, b] = pts;
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
-function lbMid(pts) {
-  const [a, b] = pts;
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
+// The close (X) button and prev/next arrows sit inside #pdpMainWrap but must
+// never feed the pinch/pan/tap gesture system — if a tap on the close button
+// also toggled the zoom view via the generic tap handler, the popup would
+// close mid-pointerup, and the browser's follow-up synthetic "click" event
+// would then hit-test against whatever is now underneath (e.g. the navbar's
+// cart button), effectively clicking through to it. Their own onclick
+// handlers run the actions instead.
+function isZoomControl(target) { return !!target.closest('.pdp-zoom-close, .pdp-arr'); }
 
 (function() {
-  const stage = () => document.getElementById('pdpLbStage');
-
   document.addEventListener('pointerdown', e => {
-    if (!e.target.closest('#pdpLbStage')) return;
-    LB.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (LB.pointers.size === 2) {
-      const pts = [...LB.pointers.values()];
-      LB.startDist = lbDist(pts);
-      LB.startScale = LB.scale;
-      LB.startMid = lbMid(pts);
-    } else if (LB.pointers.size === 1) {
-      LB.panStart = { x: e.clientX, y: e.clientY, lx: LB.x, ly: LB.y };
+    if (!e.target.closest('#pdpMainWrap') || isZoomControl(e.target)) return;
+    Z.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (Z.pointers.size === 2) {
+      const pts = [...Z.pointers.values()];
+      Z.startDist = zDist(pts);
+      Z.startScale = Z.scale;
+    } else if (Z.pointers.size === 1) {
+      Z.panStart = { x: e.clientX, y: e.clientY, lx: Z.x, ly: Z.y };
     }
   });
 
   document.addEventListener('pointermove', e => {
-    if (!LB.pointers.has(e.pointerId)) return;
-    LB.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (LB.pointers.size === 2) {
-      const pts = [...LB.pointers.values()];
-      const dist = lbDist(pts);
-      const factor = dist / (LB.startDist || dist);
-      LB.scale = Math.max(1, Math.min(MAX_SCALE, LB.startScale * factor));
-      applyLbTransform();
-    } else if (LB.pointers.size === 1 && LB.scale > 1.01 && LB.panStart) {
-      LB.x = LB.panStart.lx + (e.clientX - LB.panStart.x);
-      LB.y = LB.panStart.ly + (e.clientY - LB.panStart.y);
-      applyLbTransform();
+    if (!Z.pointers.has(e.pointerId)) return;
+    Z.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (Z.pointers.size === 2) {
+      const pts = [...Z.pointers.values()];
+      const dist = zDist(pts);
+      const factor = dist / (Z.startDist || dist);
+      Z.scale = Math.max(1, Math.min(MAX_ZOOM, Z.startScale * factor));
+      applyZoom();
+    } else if (Z.pointers.size === 1 && Z.scale > 1.01 && Z.panStart) {
+      Z.x = Z.panStart.lx + (e.clientX - Z.panStart.x);
+      Z.y = Z.panStart.ly + (e.clientY - Z.panStart.y);
+      applyZoom();
     }
   });
 
   function endPointer(e) {
-    const wasSingle = LB.pointers.size === 1;
-    const pt = LB.pointers.get(e.pointerId);
-    LB.pointers.delete(e.pointerId);
-    if (LB.scale < 1.05) { LB.scale = 1; LB.x = 0; LB.y = 0; applyLbTransform(); }
-    if (wasSingle && LB.scale <= 1.01 && pt && LB.panStart) {
-      const dx = e.clientX - LB.panStart.x;
-      if (Math.abs(dx) > 50) { if (dx < 0) lbNext(); else lbPrev(); }
-    }
-    if (LB.pointers.size === 0) {
-      const now = Date.now();
-      if (now - LB.lastTapTime < 300 && Math.abs(e.clientX - LB.lastTapX) < 30) {
-        LB.scale = LB.scale > 1.01 ? 1 : 2.5;
-        LB.x = 0; LB.y = 0;
-        applyLbTransform();
-        LB.lastTapTime = 0;
-      } else {
-        LB.lastTapTime = now;
-        LB.lastTapX = e.clientX;
+    const wasSingle = Z.pointers.size === 1;
+    const wasZoomed = Z.scale > 1.01;
+    const panStart = Z.panStart;
+    Z.pointers.delete(e.pointerId);
+    if (wasSingle && !wasZoomed && panStart) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) nextPhoto(); else prevPhoto();
+      } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+        toggleZoomView(); // a plain tap opens the fullscreen popup (or closes it if already open)
       }
-      LB.panStart = null;
+    }
+    if (Z.pointers.size === 0) {
+      // Zoom only lives while a finger is touching the photo — the moment
+      // every finger lifts, spring back to the normal (unzoomed) view.
+      if (Z.scale > 1.01) resetZoom();
+      Z.panStart = null;
     }
   }
-  document.addEventListener('pointerup', e => { if (e.target.closest('#pdpLbStage') || LB.pointers.has(e.pointerId)) endPointer(e); });
-  document.addEventListener('pointercancel', e => { if (LB.pointers.has(e.pointerId)) endPointer(e); });
+  document.addEventListener('pointerup', e => { if (isZoomControl(e.target)) return; if (e.target.closest('#pdpMainWrap') || Z.pointers.has(e.pointerId)) endPointer(e); });
+  document.addEventListener('pointercancel', e => { if (Z.pointers.has(e.pointerId)) endPointer(e); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeZoomView();
+  });
 
   document.addEventListener('wheel', e => {
-    if (!e.target.closest('#pdpLbStage')) return;
+    if (!e.target.closest('#pdpMainWrap')) return;
     e.preventDefault();
     const delta = -e.deltaY * 0.0015;
-    LB.scale = Math.max(1, Math.min(MAX_SCALE, LB.scale + delta));
-    if (LB.scale <= 1.01) { LB.scale = 1; LB.x = 0; LB.y = 0; }
-    applyLbTransform();
+    Z.scale = Math.max(1, Math.min(MAX_ZOOM, Z.scale + delta));
+    if (Z.scale <= 1.01) { Z.scale = 1; Z.x = 0; Z.y = 0; }
+    applyZoom();
   }, { passive: false });
-
-  document.getElementById('pdpLightbox').addEventListener('click', e => {
-    if ((e.target.id === 'pdpLightbox' || e.target.id === 'pdpLbStage') && LB.scale <= 1.01) closeLightbox();
-  });
-  document.addEventListener('keydown', e => {
-    if (!document.getElementById('pdpLightbox').classList.contains('open')) return;
-    if (e.key === 'Escape') closeLightbox();
-    if (e.key === 'ArrowLeft') lbPrev();
-    if (e.key === 'ArrowRight') lbNext();
-  });
 })();
 
 // ── Utils ──
