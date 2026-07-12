@@ -118,23 +118,77 @@ function renderNav() {
   const cats = DATA
     ? ((DATA.nav_categories && DATA.nav_categories.length ? DATA.nav_categories : (DATA.filters.categories || [])).slice(0, 10))
     : [];
+  const catButtons = cats.map(c =>
+    '<button class="nav-cat-link" onclick="goCatalogCat(\'' + jq(c) + '\')">' + esc(c) + '</button>'
+  ).join('') + '<button class="nav-cat-link" onclick="goCatalogCat(\'\')">Shop All</button>';
+
+  // Mobile/narrow bar keeps an explicit "← Back" link (no separate back
+  // button there); the single-row desktop header relies on the logo for
+  // home and doesn't need one.
   const bar = document.getElementById('navCatsBar');
-  if (bar) {
-    bar.innerHTML =
-      '<button class="nav-cat-link" onclick="goBack()">← Back</button>' +
-      cats.map(c =>
-        '<button class="nav-cat-link" onclick="goCatalogCat(\'' + jq(c) + '\')">' + esc(c) + '</button>'
-      ).join('') +
-      '<button class="nav-cat-link" onclick="goCatalogCat(\'\')">Shop All</button>';
-  }
+  if (bar) bar.innerHTML = '<button class="nav-cat-link" onclick="goBack()">← Back</button>' + catButtons;
+  const barD = document.getElementById('navdCatsBar');
+  if (barD) barD.innerHTML = catButtons;
+
+  const navdShopName = document.getElementById('navdShopName');
+  if (navdShopName && DATA) navdShopName.textContent = DATA.shop.name || '';
+
   const total = Object.values(CART).reduce((n, c) => n + c.qty, 0);
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = total; badge.style.display = total ? 'flex' : 'none'; }
+  const badgeD = document.getElementById('navdCartBadge');
+  if (badgeD) { badgeD.textContent = total; badgeD.style.display = total ? 'flex' : 'none'; }
 }
 
 function goCatalogCat(cat) {
   const base = '/s.html?t=' + encodeURIComponent(TOKEN);
   window.location.href = base + (cat ? '&cat=' + encodeURIComponent(cat) : '');
+}
+
+// There's no product grid on this page to filter — searching from here hands
+// the query off to the catalogue page (via localStorage, picked up by its
+// init()) and navigates there, same as tapping a category would.
+function onSearchKey(e, val) {
+  if (e.key !== 'Enter') return;
+  const q = (val || '').trim();
+  if (!q) return;
+  try { localStorage.setItem('bag_pending_search', q); } catch (err) {}
+  goCatalogCat('');
+}
+
+// ── Order history (mirrors the catalogue page's drawer) ──
+async function openHistory() {
+  const d = document.getElementById('historyDrawer');
+  d.classList.add('open'); document.body.style.overflow = 'hidden';
+  const body = document.getElementById('historyBody');
+  body.innerHTML = '<p class="muted" style="padding:12px">Loading your orders…</p>';
+  const { ok, status, data } = await api('/api/history?token=' + encodeURIComponent(TOKEN));
+  if (status === 403) { body.innerHTML = '<p class="muted" style="padding:12px">This link has expired.</p>'; return; }
+  if (!ok || !data) { body.innerHTML = '<p class="muted" style="padding:12px">Could not load your orders. Please try again.</p>'; return; }
+  renderHistory(data.orders || []);
+}
+function closeHistory() { document.getElementById('historyDrawer').classList.remove('open'); document.body.style.overflow = ''; }
+function renderHistory(orders) {
+  const body = document.getElementById('historyBody');
+  if (!orders.length) {
+    body.innerHTML = '<p class="muted" style="padding:16px 12px">No past orders yet. Anything you order will show up here next time.</p>';
+    return;
+  }
+  body.innerHTML = orders.map(o => {
+    const dt = new Date(o.created_at);
+    const dateStr = isNaN(dt) ? '' : dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const lines = (o.items || []).map(it => {
+      const bits = [esc(it.name || it.article_code || 'Item')];
+      if (it.color) bits.push(esc(it.color));
+      if (it.size) bits.push(esc(it.size));
+      return '<div class="hist-line"><span>' + bits.join(' · ') + '</span><span class="muted">×' + (it.qty || 1) + '</span></div>';
+    }).join('');
+    const totalStr = (SHOW_PRICES && o.est_total) ? '<span class="hist-total">' + esc(CUR) + ' ' + o.est_total + '</span>' : '';
+    return '<div class="hist-order">' +
+      '<div class="hist-head"><strong>' + dateStr + '</strong>' + totalStr + '</div>' +
+      lines +
+    '</div>';
+  }).join('');
 }
 
 // Logo → catalogue home. Always an explicit navigation (never history.back),
@@ -222,7 +276,7 @@ function quickAddRec(aid) {
   if (CART[v.id]) CART[v.id].qty = Math.min(CART[v.id].qty + 1, v.available_qty);
   else CART[v.id] = { qty: 1, label, price };
   saveCart();
-  toast('Added to cart ✓');
+  cartAddedToast(label);
   renderCart();
 }
 function youMayLikeHTML() {
@@ -493,7 +547,7 @@ function addToCart() {
   else CART[v.id] = { qty, label, price };
   SEL.qty = 1;
   saveCart();
-  toast('Added to cart ✓');
+  cartAddedToast(label);
   renderCart();
   renderPDP();
 }
@@ -502,11 +556,10 @@ function addToCart() {
 function renderCart() {
   const ids = Object.keys(CART);
   const count = ids.reduce((n, id) => n + CART[id].qty, 0);
-  document.getElementById('cartbar').style.display = ids.length ? 'block' : 'none';
-  document.body.classList.toggle('has-cartbar', ids.length > 0);
-  document.getElementById('cartCount').textContent = count;
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
+  const badgeD = document.getElementById('navdCartBadge');
+  if (badgeD) { badgeD.textContent = count; badgeD.style.display = count ? 'flex' : 'none'; }
   let total = 0;
   document.getElementById('cartLines').innerHTML = ids.map(id => {
     total += (CART[id].price || 0) * CART[id].qty;

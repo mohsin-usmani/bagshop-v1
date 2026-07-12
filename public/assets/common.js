@@ -45,6 +45,25 @@ function toast(msg) {
   el._t = setTimeout(() => el.classList.remove("show"), 1800);
 }
 
+// Myntra-style "Added to cart" confirmation — pops near the cart icon,
+// stays a few seconds, then fades. Replaces the old always-on bottom bar so
+// the cart icon + badge in the header is the only permanent cart affordance.
+function cartAddedToast(label) {
+  let el = document.querySelector(".cart-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "cart-toast";
+    el.innerHTML = '<span class="cart-toast-icon">✓</span><span class="cart-toast-text"></span>';
+    document.body.appendChild(el);
+  }
+  el.querySelector(".cart-toast-text").textContent = label ? "Added to cart — " + label : "Added to cart";
+  el.classList.remove("show");
+  void el.offsetWidth; // restart the animation if a toast is already showing
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 4500);
+}
+
 // ── Branding (admin-uploaded logo + favicon) ──
 function setFavicon(href) {
   if (!href) return;

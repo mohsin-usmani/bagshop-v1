@@ -124,17 +124,27 @@ async function init() {
   renderNav();
   renderMobMenu();
   syncStickyOffsets();
+  // A search submitted from the product page's header hands its query off
+  // here (no product grid to filter over there) — pick it up once and clear it.
+  let pendingSearch = '';
+  try { pendingSearch = localStorage.getItem('bag_pending_search') || ''; localStorage.removeItem('bag_pending_search'); } catch (e) {}
+
   // Restore the view from the URL so returning from a product (Back button or the
   // phone's back) lands the customer back in the category/new-arrivals they were in.
   const urlCat = qs('cat'), urlNew = qs('new');
-  if (urlNew) goNewArrivals();
+  if (pendingSearch) {
+    VIEW = 'catalogue'; CAT_FILTER = ''; NEW_ARR = false; FILTER.q = pendingSearch;
+    stopBanner();
+    syncCatalogUrl();
+    renderApp();
+    const si = document.getElementById('navSearchInput'); if (si) si.value = pendingSearch;
+    const sdi = document.getElementById('navdSearchInput'); if (sdi) sdi.value = pendingSearch;
+  } else if (urlNew) goNewArrivals();
   else if (urlCat) goCategory(urlCat, qs('color') || '', qs('size') || '');
   else goHome();
 }
 
 function showExpired() {
-  document.getElementById('cartbar').style.display = 'none';
-  document.body.classList.remove('has-cartbar');
   document.getElementById('app').innerHTML =
     '<div class="notice card"><h2>Link expired</h2>' +
     '<p class="muted" style="margin-top:8px">This catalogue link is no longer active. Please message us on WhatsApp to get a fresh link.</p></div>';
@@ -1213,7 +1223,7 @@ function addToCart(aid) {
   else CART[v.id] = { qty, label, price };
   SELECTION[aid].qty = 1;
   saveCartToStorage();
-  toast('Added to cart');
+  cartAddedToast(label);
   renderCart();
   refreshModal();
   const el = document.getElementById('pw-' + aid); if (el) el.innerHTML = photoWrapHTML(a);
@@ -1223,9 +1233,6 @@ function addToCart(aid) {
 function renderCart() {
   const ids = Object.keys(CART);
   const count = ids.reduce((n, id) => n + CART[id].qty, 0);
-  document.getElementById('cartbar').style.display = ids.length ? 'block' : 'none';
-  document.body.classList.toggle('has-cartbar', ids.length > 0);
-  document.getElementById('cartCount').textContent = count;
   // nav badge (mobile + desktop)
   const badge = document.getElementById('navCartBadge');
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
