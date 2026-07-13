@@ -121,6 +121,7 @@ async function uploadBranding(kind, input) {
   });
 }
 async function removeBranding(kind) {
+  if (!confirm("Remove the custom " + kind + "? The default will show instead.")) return;
   const { ok } = await api("/api/admin/branding?kind=" + kind, { method: "DELETE" });
   if (!ok) return toast("Failed");
   if (kind === "logo") SETTINGS.logo_url = ""; else SETTINGS.favicon_url = "";
@@ -161,6 +162,7 @@ function openCropper(file, opts, onDone, onCancel) {
         '<div class="crop-head"><span class="crop-title">' + esc(opts.title || "Crop image") + '</span>' +
           '<button class="crop-x" aria-label="Close">✕</button></div>' +
         (opts.ratioLabel ? '<div class="crop-note">' + esc(opts.ratioLabel) + ' — drag to reposition, use the slider to zoom.</div>' : '') +
+        (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length ? '<div class="crop-legend" id="cropLegend"></div>' : '') +
         '<div class="crop-stage" style="width:' + fw + 'px;height:' + fh + 'px">' +
           '<img alt=""><div class="crop-grid"></div>' +
         '</div>' +
@@ -186,21 +188,39 @@ function openCropper(file, opts, onDone, onCancel) {
     imgEl.style.width = natW + "px";
     imgEl.style.height = natH + "px";
 
-    // Responsive "safe area": the crop is one image but is shown at different
-    // aspect ratios per device (object-fit:cover), so edges get cut. Draw the
-    // region that stays visible on EVERY device and dim what falls outside it.
+    // Responsive crop guides: the same photo is shown at different aspect
+    // ratios per device (object-fit:cover), so each one keeps a different
+    // region and cuts the rest. Draw one dashed box per device, colour-coded
+    // and explained in the legend, instead of a single unlabeled "safe" box —
+    // so the admin can see exactly what each device will show, not just the
+    // intersection of all of them.
+    const CROP_DEVICE_COLORS = ["#e0a03c", "#3fb0e0", "#e05a5a", "#7bd48d"];
     if (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) {
-      let insetX = 0, insetY = 0;
-      opts.deviceCrops.forEach((dc) => {
-        if (dc.ratio > ratio)      insetY = Math.max(insetY, (1 - ratio / dc.ratio) / 2); // wider device → top/bottom cut
-        else if (dc.ratio < ratio) insetX = Math.max(insetX, (1 - dc.ratio / ratio) / 2); // narrower device → sides cut
+      // Sort widest-inset-first (tightest crop last) so the tightest box's dim
+      // overlay sits on top and doesn't hide a looser box drawn after it.
+      const withInsets = opts.deviceCrops.map((dc) => {
+        let insetX = 0, insetY = 0;
+        if (dc.ratio > ratio)      insetY = (1 - ratio / dc.ratio) / 2; // wider device → top/bottom cut
+        else if (dc.ratio < ratio) insetX = (1 - dc.ratio / ratio) / 2; // narrower device → sides cut
+        return { ...dc, insetX, insetY, area: (1 - 2 * insetX) * (1 - 2 * insetY) };
       });
-      const safe = document.createElement("div");
-      safe.className = "crop-safe";
-      safe.style.left = safe.style.right = (insetX * 100) + "%";
-      safe.style.top = safe.style.bottom = (insetY * 100) + "%";
-      safe.innerHTML = '<span class="crop-safe-tag">Safe on all screens</span>';
-      stage.appendChild(safe);
+      withInsets.sort((a, b) => b.area - a.area); // largest box first, tightest last
+      const legend = document.getElementById("cropLegend");
+      withInsets.forEach((dc, i) => {
+        const color = CROP_DEVICE_COLORS[i % CROP_DEVICE_COLORS.length];
+        const box = document.createElement("div");
+        box.className = "crop-device-box" + (i === withInsets.length - 1 ? " crop-tightest" : "");
+        box.style.left = box.style.right = (dc.insetX * 100) + "%";
+        box.style.top = box.style.bottom = (dc.insetY * 100) + "%";
+        box.style.borderColor = color;
+        stage.appendChild(box);
+        if (legend) {
+          const item = document.createElement("span");
+          item.className = "crop-legend-item";
+          item.innerHTML = '<span class="crop-legend-dot" style="background:' + color + '"></span>' + esc(dc.name);
+          legend.appendChild(item);
+        }
+      });
     }
 
     function clamp() {
@@ -474,13 +494,58 @@ function refreshArticleLive(aid) {
 function renderCatList() {
   const cats = [...new Set(ARTICLES.map((a) => a.category).filter(Boolean))];
   document.getElementById("catList").innerHTML = cats.map((c) => '<option value="' + esc(c) + '">').join("");
-  // banner link datalist: categories + article codes
-  const bnrList = document.getElementById("bnrLinkList");
-  if (bnrList) {
-    bnrList.innerHTML =
-      cats.map(c => '<option value="' + esc(c) + '" label="Category: ' + esc(c) + '">').join("") +
-      ARTICLES.map(a => '<option value="' + esc(a.article_code) + '" label="' + esc(a.article_code) + ' — ' + esc(a.name || '') + '">').join("");
-  }
+}
+
+// Banner link search — same rich autocomplete as "You may also like" (thumbnail
+// + name), so the admin can spot the right product/category at a glance
+// instead of a plain text dropdown. Shared by the "add banner" form and every
+// existing banner's link field (each has its own input id + matching
+// "<id>_results" box).
+function bannerLinkSearch(inputId) {
+  const inp = document.getElementById(inputId);
+  const box = document.getElementById(inputId + "_results");
+  if (!inp || !box) return;
+  const q = (inp.value || "").trim().toLowerCase();
+  if (!q) { box.innerHTML = ""; box.style.display = "none"; return; }
+  const cats = [...new Set(ARTICLES.map(a => a.category).filter(Boolean))]
+    .filter(c => c.toLowerCase().includes(q)).slice(0, 5);
+  const prods = ARTICLES.filter(a =>
+    (a.name || "").toLowerCase().includes(q) || (a.article_code || "").toLowerCase().includes(q)
+  ).slice(0, 6);
+  const catHtml = cats.map(c =>
+    '<div class="rel-result" onclick="pickBannerLink(' + jq(inputId) + ',' + jq(c) + ')">' +
+      '<span class="rel-thumb rel-thumb-empty"></span>' +
+      '<div class="rel-result-txt"><div class="rel-result-name">' + esc(c) + '</div>' +
+      '<div class="rel-result-sub">Category</div></div>' +
+    '</div>'
+  ).join("");
+  const prodHtml = prods.map(a => {
+    const url = (a.photos && a.photos[0]) ? a.photos[0].url : "";
+    const thumb = url ? '<img class="rel-thumb" src="' + esc(url) + '" alt="" loading="lazy">' : '<span class="rel-thumb rel-thumb-empty"></span>';
+    return '<div class="rel-result" onclick="pickBannerLink(' + jq(inputId) + ',' + jq(a.article_code) + ')">' +
+      thumb +
+      '<div class="rel-result-txt"><div class="rel-result-name">' + esc(a.name || a.article_code) + '</div>' +
+      '<div class="rel-result-sub">' + esc(a.article_code) + (a.category ? ' · ' + esc(a.category) : '') + '</div></div>' +
+    '</div>';
+  }).join("");
+  box.innerHTML = (catHtml + prodHtml) || '<div class="rel-empty">No matches</div>';
+  box.style.display = "block";
+}
+function pickBannerLink(inputId, value) {
+  const inp = document.getElementById(inputId);
+  if (inp) inp.value = value;
+  const box = document.getElementById(inputId + "_results");
+  if (box) { box.innerHTML = ""; box.style.display = "none"; }
+  if (inputId.indexOf("bl_") === 0) bannerRowDirty(inputId.slice(3));
+}
+// Closes the dropdown on blur (e.g. when the admin pastes a URL — there's
+// never a product/category match for that, so "No matches" would otherwise
+// stay open forever and sit on top of the Visible/Delete row below it).
+// Called via a short setTimeout from onblur so a click on a result still
+// registers before the box disappears.
+function closeBannerResults(inputId) {
+  const box = document.getElementById(inputId + "_results");
+  if (box) box.style.display = "none";
 }
 
 // Category picker: a text input (type a new or existing category) plus a native
@@ -519,14 +584,13 @@ function hideWizard() {
   document.getElementById("wzContainer").innerHTML = "";
 }
 function renderWizardStep1() {
-  const cur = SETTINGS.currency || "Rs.";
   // If we already created the article (e.g. user came Back from step 2), prefill it and edit in place.
   const a = WIZARD_AID ? (ARTICLES.find(x => x.id === WIZARD_AID) || {}) : {};
   const editing = !!WIZARD_AID;
   document.getElementById("wzContainer").innerHTML =
     '<div class="card artcard">' +
       '<div class="wz-header">' +
-        '<div class="wz-steps"><span class="wz-step on">1</span><span class="wz-step' + (editing ? ' done' : '') + '">2</span><span class="wz-step' + (editing ? ' done' : '') + '">3</span></div>' +
+        '<div class="wz-steps"><span class="wz-step on">1</span><span class="wz-step' + (editing ? ' done' : '') + '">2</span><span class="wz-step' + (editing ? ' done' : '') + '">3</span><span class="wz-step' + (editing ? ' done' : '') + '">4</span></div>' +
         '<h4 style="margin:0;flex:1">Basic Info</h4>' +
         '<button class="btn sm ghost" onclick="hideWizard()">Cancel</button>' +
       '</div>' +
@@ -534,9 +598,6 @@ function renderWizardStep1() {
         '<div class="field"><label>Article Code *</label><input id="wz1_code" placeholder="BAG-1023" autocomplete="off" value="' + esc(a.article_code || "") + '"></div>' +
         '<div class="field"><label>Name</label><input id="wz1_name" placeholder="Ladies Handbag" value="' + esc(a.name || "") + '"></div>' +
         '<div class="field"><label>Category *</label>' + catComboHTML("wz1_cat", a.category) + '</div>' +
-        '<div class="field"><label>Price / piece (' + esc(cur) + ')</label><input id="wz1_price" type="number" placeholder="500" value="' + (a.base_price != null ? a.base_price : "") + '">' +
-          '<p class="muted" style="font-size:11px;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400">Default price for every colour. In the next step you can leave each colour\'s price blank to use this, or override it only where a colour costs more.</p>' +
-        '</div>' +
       '</div>' +
       '<div class="field"><label>Description</label><textarea id="wz1_desc" rows="2" style="resize:vertical;width:100%;padding:8px;border:1px solid var(--line);font-family:inherit;font-size:14px;border-radius:2px">' + esc(a.description || "") + '</textarea></div>' +
       '<div class="row-actions" style="justify-content:flex-end">' +
@@ -548,7 +609,6 @@ function renderWizardStep1() {
 async function wzStep1Submit() {
   const code = val("wz1_code"), name = val("wz1_name"), cat = val("wz1_cat");
   const desc = (document.getElementById("wz1_desc") || {}).value?.trim() || "";
-  const price = val("wz1_price");
   if (!code) return toast("Article code is required");
   if (!cat) return toast("Category is required");
   // Exclude the article we're currently editing from the duplicate check.
@@ -559,14 +619,14 @@ async function wzStep1Submit() {
     if (el) { el.style.border = "1.5px solid var(--danger,#dc3545)"; el.focus(); setTimeout(() => el.style.border = "", 2500); }
     return;
   }
-  const basePrice = price ? Number(price) : null;
 
   if (WIZARD_AID) {
     // Editing the already-created article (came Back from a later step) — update in place.
+    // Price is set per-colour in step 2, not here, so keep whatever base_price already exists.
     const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
     const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: WIZARD_AID, article_code: code, name, category: cat, description: desc,
-        base_price: basePrice, is_active: 1, is_new_arrival: a.is_new_arrival ? 1 : 0 }) });
+        base_price: a.base_price ?? null, is_active: 1, is_new_arrival: a.is_new_arrival ? 1 : 0 }) });
     if (!ok) return toast("Failed to save changes");
     toast("Details saved");
     await loadArticles();
@@ -575,7 +635,7 @@ async function wzStep1Submit() {
   }
 
   const { ok, data } = await api("/api/admin/articles", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ article_code: code, name, category: cat, description: desc, base_price: basePrice }) });
+    body: JSON.stringify({ article_code: code, name, category: cat, description: desc, base_price: null }) });
   if (!ok) return toast("Failed to create article");
   WIZARD_AID = data.id;
   toast("Article created — now add colours & stock");
@@ -589,7 +649,7 @@ function renderWizardStep2() {
   document.getElementById("wzContainer").innerHTML =
     '<div class="card artcard">' +
       '<div class="wz-header">' +
-        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step on">2</span><span class="wz-step">3</span></div>' +
+        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step on">2</span><span class="wz-step">3</span><span class="wz-step">4</span></div>' +
         '<h4 style="margin:0;flex:1">Colours &amp; Stock — <strong>' + esc(a.article_code || "") + '</strong></h4>' +
         '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;cursor:pointer;font-weight:normal">' +
           '<input type="checkbox" id="wz2_na" ' + (a.is_new_arrival ? "checked" : "") + ' onchange="wzToggleNewArrival()" style="width:auto"> ⚡ New Arrival' +
@@ -614,8 +674,8 @@ function renderWizardStep2() {
       '<div class="row-actions" style="justify-content:space-between;margin-top:16px;gap:8px;flex-wrap:wrap">' +
         '<button class="btn ghost sm" onclick="renderWizardStep1()">← Back</button>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<button class="btn ghost sm" onclick="wzStep3()">Skip to Photos</button>' +
-          '<button class="btn" onclick="wzStep3()">Next: Photos →</button>' +
+          '<button class="btn ghost sm" onclick="wzStep3()">Skip</button>' +
+          '<button class="btn" onclick="wzStep3()">Next: You May Also Like →</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -679,6 +739,7 @@ async function wzAddVariant() {
   renderWizardVariantList();
 }
 async function wzDelVariant(vid) {
+  if (!confirm("Remove this colour/size?")) return;
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(vid), { method: "DELETE" });
   if (!ok) return toast("Failed");
   await loadArticles(); renderWizardVariantList();
@@ -687,9 +748,13 @@ async function wzToggleNewArrival() {
   if (!WIZARD_AID) return;
   const a = ARTICLES.find(x => x.id === WIZARD_AID); if (!a) return;
   const checked = (document.getElementById("wz2_na") || {}).checked;
-  await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
+  const { ok } = await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
     body: JSON.stringify({ id: WIZARD_AID, article_code: a.article_code, name: a.name, category: a.category,
       base_price: a.base_price, description: a.description, is_active: 1, is_new_arrival: checked ? 1 : 0 }) });
+  // Keep the in-memory copy in sync — later steps (e.g. saving "You may also
+  // like") re-send every field from this same object, and would otherwise
+  // silently revert this back to its old value using stale data.
+  if (ok) a.is_new_arrival = checked ? 1 : 0;
 }
 // Live-status bar shown inside the wizard (steps 2 & 3). The Live toggle is the same
 // switch as the per-colour "Live" box in Stock — it turns every colour of this product
@@ -700,9 +765,12 @@ function wzStatusHTML() {
   const info = stockLiveInfo(a);
   const vs = a.variants || [];
   const anyLive = vs.some(v => v.is_active);
-  const msg = info.live ? 'This product is visible to customers.' : esc(info.reason);
+  const hasPhoto = (a.photos || []).length > 0;
+  // Photos step only: without a photo yet, the toggle is dulled and won't
+  // actually turn the product live — tapping it explains why instead.
+  const msg = !hasPhoto ? 'Add a photo to go live.' : (info.live ? 'This product is visible to customers.' : esc(info.reason));
   const toggle = vs.length
-    ? '<label class="wz-live-toggle" title="Show/hide this product to customers — same as the Live switch in Stock">' +
+    ? '<label class="wz-live-toggle' + (hasPhoto ? '' : ' dulled') + '" title="' + (hasPhoto ? 'Show/hide this product to customers — same as the Live switch in Stock' : 'Add a photo first to go live') + '">' +
         '<input type="checkbox" ' + (anyLive ? 'checked' : '') + ' onchange="wzSetLive(this.checked)"> Live' +
       '</label>'
     : '';
@@ -723,6 +791,11 @@ async function wzSetLive(checked) {
   const a = ARTICLES.find(x => x.id === WIZARD_AID); if (!a) return;
   const vs = a.variants || [];
   if (!vs.length) return;
+  if (checked && !(a.photos || []).length) {
+    toast("Add a photo to go live");
+    refreshWizardStatus(); // snap the checkbox back — nothing actually changed
+    return;
+  }
   const updates = vs.map(v => ({ id: v.id, available_qty: v.available_qty, price: v.price, is_active: checked }));
   const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
     body: JSON.stringify({ updates }) });
@@ -733,14 +806,54 @@ async function wzSetLive(checked) {
   toast(checked ? (info.live ? "✓ Product is live" : "Live on — add stock qty to show it") : "Product hidden");
 }
 
+// Step 3 — "You may also like": pick a few products to recommend on this
+// product's page, same picker used in the Edit modal (relatedEditorHTML /
+// relSearch / addRelated / removeRelated), just reused here against the
+// article the wizard already created in step 1.
 function wzStep3() {
+  const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
+  try { const r = JSON.parse(a.related_ids || "[]"); EM_RELATED = Array.isArray(r) ? r.filter(Boolean) : []; }
+  catch (e) { EM_RELATED = []; }
+  document.getElementById("wzContainer").innerHTML =
+    '<div class="card artcard">' +
+      '<div class="wz-header">' +
+        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step done">✓</span><span class="wz-step on">3</span><span class="wz-step">4</span></div>' +
+        '<h4 style="margin:0;flex:1">You May Also Like — <strong>' + esc(a.article_code || "") + '</strong></h4>' +
+        '<span class="muted" style="font-size:13px">Optional</span>' +
+      '</div>' +
+      '<p class="muted" style="margin-bottom:12px;font-size:13px">Pick a few products to recommend on this product\'s page.</p>' +
+      '<div id="ev-rel-' + a.id + '">' + relatedEditorHTML(a) + '</div>' +
+      '<div class="row-actions" style="justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:8px">' +
+        '<button class="btn ghost sm" onclick="renderWizardStep2()">← Back</button>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn ghost sm" onclick="wzStep3Next()">Skip</button>' +
+          '<button class="btn" onclick="wzStep3Next()">Next: Photos →</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+// Persists whatever "You may also like" picks were made (Skip and Next behave
+// the same — this step is optional either way, so there's nothing to discard)
+// then moves on to the photos step.
+async function wzStep3Next() {
+  const a = ARTICLES.find(x => x.id === WIZARD_AID);
+  if (a) {
+    await api("/api/admin/articles", { method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: WIZARD_AID, article_code: a.article_code, name: a.name, category: a.category,
+        base_price: a.base_price, description: a.description, is_active: 1, is_new_arrival: a.is_new_arrival ? 1 : 0,
+        related_ids: EM_RELATED }) });
+    a.related_ids = JSON.stringify(EM_RELATED);
+  }
+  wzStep4();
+}
+function wzStep4() {
   const a = ARTICLES.find(x => x.id === WIZARD_AID) || {};
   const knownColors = [...new Set((a.variants || []).map(v => v.color).filter(Boolean))];
   const colorOpts = knownColors.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
   document.getElementById("wzContainer").innerHTML =
     '<div class="card artcard">' +
       '<div class="wz-header">' +
-        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step done">✓</span><span class="wz-step on">3</span></div>' +
+        '<div class="wz-steps"><span class="wz-step done">✓</span><span class="wz-step done">✓</span><span class="wz-step done">✓</span><span class="wz-step on">4</span></div>' +
         '<h4 style="margin:0;flex:1">Photos — <strong>' + esc(a.article_code || "") + '</strong></h4>' +
         '<span class="muted" style="font-size:13px">Optional</span>' +
       '</div>' +
@@ -752,7 +865,7 @@ function wzStep3() {
       '</div>' +
       '<div id="wzStatus" class="wz-status-wrap" style="margin-top:20px"></div>' +
       '<div class="row-actions" style="justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:8px">' +
-        '<button class="btn ghost sm" onclick="renderWizardStep2()">← Back</button>' +
+        '<button class="btn ghost sm" onclick="wzStep3()">← Back</button>' +
         '<button class="btn" onclick="wzFinish()">✓ Done — View in Stock</button>' +
       '</div>' +
     '</div>';
@@ -786,6 +899,7 @@ async function wzUploadPhoto(input) {
     });
 }
 async function wzDelPhoto(id) {
+  if (!confirm("Delete this photo?")) return;
   const { ok } = await api("/api/admin/photos?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (!ok) return toast("Failed");
   await loadArticles();
@@ -982,7 +1096,7 @@ function relatedEditorHTML(a) {
   const chips = chosen.length
     ? '<div class="rel-chips">' + chosen.map(r =>
         '<span class="rel-chip">' + relThumbHTML(r) + '<span class="rel-chip-name">' + esc(r.name || r.article_code) + '</span>' +
-        '<button type="button" title="Remove" onclick="removeRelated(' + jq(r.id) + ')">✕</button></span>'
+        '<button type="button" title="Remove" onclick="removeRelated(' + jq(a.id) + ',' + jq(r.id) + ')">✕</button></span>'
       ).join('') + '</div>'
     : '<p class="muted" style="font-size:12.5px;margin:0 0 10px">None yet — search below to add.</p>';
   return chips +
@@ -1023,11 +1137,12 @@ function addRelated(aid, rid) {
   if (rid && !EM_RELATED.includes(rid)) EM_RELATED.push(rid);
   renderRelatedEditor(aid); // rebuild — clears the search box + results
 }
-function removeRelated(rid) {
+function removeRelated(aid, rid) {
   EM_RELATED = EM_RELATED.filter(x => x !== rid);
-  renderRelatedEditor(EDIT_MODAL_AID);
+  renderRelatedEditor(aid);
 }
 async function delVariant(id) {
+  if (!confirm("Remove this colour/size?")) return;
   const { ok } = await api("/api/admin/variants?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (ok) { toast("Removed"); loadArticles(); }
 }
@@ -1045,6 +1160,7 @@ async function uploadPhoto(aid, input) {
     () => { toast("Photos added"); loadArticles(); });
 }
 async function delPhoto(id) {
+  if (!confirm("Delete this photo?")) return;
   const { ok } = await api("/api/admin/photos?id=" + encodeURIComponent(id), { method: "DELETE" });
   if (ok) { toast("Photo removed"); loadArticles(); }
 }
@@ -1124,7 +1240,7 @@ async function loadLinks() {
   const now = data.now;
   const el = document.getElementById("linkList");
   if (!data.tokens.length) { el.innerHTML = '<p class="muted">No links yet.</p>'; return; }
-  el.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Status</th><th>Expires</th><th>Adjust validity</th><th></th></tr></thead><tbody>' +
+  el.innerHTML = '<div class="arow-list">' +
     data.tokens.map((t) => {
       const expired = t.is_revoked || now > t.expires_at;
       const status = t.is_revoked ? '<span class="expired">Revoked</span>' : (expired ? '<span class="expired">Expired</span>' : '<span class="live">Active</span>');
@@ -1138,11 +1254,14 @@ async function loadLinks() {
           '<span class="muted" style="font-size:12px">hrs</span>' +
           '<button class="btn sm" id="adjsave_' + t.id + '" style="display:none" onclick="saveHours(' + jq(t.id) + ')">Save</button>' +
         '</div>';
-      return '<tr><td>' + esc(t.customer_label || "—") + '<br><span class="muted" style="font-size:12px">' + esc(t.customer_phone || "") + '</span></td>' +
-        '<td>' + status + '</td><td>' + fmt(t.expires_at) + '</td>' +
-        '<td>' + adjust + '</td>' +
-        '<td>' + (expired ? '' : '<button class="btn danger sm" onclick="revoke(' + jq(t.id) + ')">Revoke</button>') + '</td></tr>';
-    }).join("") + '</tbody></table></div>';
+      return '<div class="arow">' +
+        '<div class="arow-f arow-f-grow"><span class="arow-f-label">Customer</span>' + esc(t.customer_label || "—") + '<br><span class="muted" style="font-size:12px">' + esc(t.customer_phone || "") + '</span></div>' +
+        '<div class="arow-f"><span class="arow-f-label">Status</span>' + status + '</div>' +
+        '<div class="arow-f"><span class="arow-f-label">Expires</span>' + fmt(t.expires_at) + '</div>' +
+        '<div class="arow-f"><span class="arow-f-label">Adjust validity</span>' + adjust + '</div>' +
+        '<div class="arow-f arow-f-actions">' + (expired ? '' : '<button class="btn danger sm" onclick="revoke(' + jq(t.id) + ')">Revoke</button>') + '</div>' +
+      '</div>';
+    }).join("") + '</div>';
 }
 async function revoke(id) {
   const { ok } = await api("/api/admin/tokens", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
@@ -1192,10 +1311,15 @@ function renderOrders() {
   if (!ORDERS.length) { el.innerHTML = '<p class="muted">No orders yet.</p>'; return; }
   const rows = ORDERS.filter(o => !q || (o.customer_label || "").toLowerCase().includes(q));
   if (!rows.length) { el.innerHTML = '<p class="muted">No orders match that search.</p>'; return; }
-  el.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Customer</th><th>Items</th><th>Est. total</th><th></th></tr></thead><tbody>' +
-    rows.map((o) => '<tr><td>' + fmt(o.created_at) + '</td><td>' + esc(o.customer_label || "—") + '</td><td>' + o.item_count + '</td><td>' + esc(cur) + (o.est_total || 0) + '</td>' +
-      '<td><button class="btn danger sm" onclick="deleteOrder(' + jq(o.id) + ')">Delete</button></td></tr>').join("") +
-    '</tbody></table></div>';
+  el.innerHTML = '<div class="arow-list">' +
+    rows.map((o) => '<div class="arow">' +
+      '<div class="arow-f"><span class="arow-f-label">When</span>' + fmt(o.created_at) + '</div>' +
+      '<div class="arow-f arow-f-grow"><span class="arow-f-label">Customer</span>' + esc(o.customer_label || "—") + '</div>' +
+      '<div class="arow-f"><span class="arow-f-label">Items</span>' + o.item_count + '</div>' +
+      '<div class="arow-f"><span class="arow-f-label">Est. total</span>' + esc(cur) + (o.est_total || 0) + '</div>' +
+      '<div class="arow-f arow-f-actions"><button class="btn danger sm" onclick="deleteOrder(' + jq(o.id) + ')">Delete</button></div>' +
+    '</div>').join("") +
+    '</div>';
 }
 
 async function deleteOrder(id) {
@@ -1224,14 +1348,16 @@ async function loadBanners() {
           '<div class="bp-box bp-mobile"><img src="' + esc(b.image_url) + '" alt=""><span class="bp-tag">Mobile</span></div>' +
         '</div>' +
         '<div class="banner-info">' +
-          '<label>Link (category name or URL)</label>' +
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
-            '<input class="banner-link-input" id="bl_' + b.id + '" value="' + esc(b.link_url || '') + '" placeholder="e.g. Handbag">' +
-            '<button class="btn sm" onclick="saveBannerLink(' + jq(b.id) + ')">Save</button>' +
+            '<div class="rel-search-wrap" style="flex:1;max-width:none">' +
+              '<input class="banner-link-input rel-search" id="bl_' + b.id + '" data-orig="' + esc(b.link_url || '') + '" value="' + esc(b.link_url || '') + '" placeholder="e.g. Handbag" autocomplete="off" oninput="bannerLinkSearch(' + jq('bl_' + b.id) + ');bannerRowDirty(' + jq(b.id) + ')" onblur="setTimeout(function(){closeBannerResults(' + jq('bl_' + b.id) + ')},150)">' +
+              '<div class="rel-results" id="bl_' + b.id + '_results" style="display:none"></div>' +
+            '</div>' +
+            '<button class="btn sm" id="blsave_' + b.id + '" style="display:none" onclick="saveBannerRow(' + jq(b.id) + ')">Save</button>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:10px">' +
             '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal">' +
-              '<input type="checkbox" ' + (b.is_active ? 'checked' : '') + ' onchange="setBannerActive(' + jq(b.id) + ',this.checked)" style="width:auto"> Visible' +
+              '<input type="checkbox" id="bv_' + b.id + '" data-orig="' + (b.is_active ? '1' : '0') + '" ' + (b.is_active ? 'checked' : '') + ' onchange="bannerRowDirty(' + jq(b.id) + ')" style="width:auto"> Visible' +
             '</label>' +
             '<button class="btn danger sm" onclick="deleteBanner(' + jq(b.id) + ')">Delete</button>' +
           '</div>' +
@@ -1251,7 +1377,7 @@ async function onBannerFile(fileInput) {
   const bannerRes = await api("/api/admin/banners");
   const currentCount = (bannerRes.data?.banners || []).length;
   if (currentCount >= 5) { fileInput.value = ""; return toast("Maximum 5 banners allowed. Delete one first."); }
-  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner — Desktop 21:8 (wide) · Mobile 4:3. Phones crop the sides, desktop crops the top & bottom, so keep the important part inside the dashed “Safe on all screens” box", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile", ratio: 4 / 3 }, { name: "Desktop", ratio: 21 / 8 }] },
+  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner — each coloured box below shows exactly what that device will display; keep the important part inside all of them", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile (4:3)", ratio: 4 / 3 }, { name: "Desktop (21:8)", ratio: 21 / 8 }] },
     async (file) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
@@ -1265,14 +1391,29 @@ async function onBannerFile(fileInput) {
     () => { fileInput.value = ""; }); // reset on cancel so the same file can be re-picked
 }
 
-async function saveBannerLink(id) {
-  const val = document.getElementById("bl_" + id)?.value || "";
-  const { ok } = await api("/api/admin/banners", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, link_url: val }) });
-  if (ok) toast("Saved"); else toast("Failed");
+// One Save button covers both the link field and the Visible tick — tapping
+// Visible no longer saves immediately, it just marks the row dirty like
+// editing the link does; nothing is written until Save is tapped.
+function bannerRowDirty(id) {
+  const inp = document.getElementById("bl_" + id), cb = document.getElementById("bv_" + id), btn = document.getElementById("blsave_" + id);
+  if (!btn) return;
+  const linkChanged = inp && inp.value !== (inp.dataset.orig || "");
+  const visChanged = cb && (cb.checked ? "1" : "0") !== (cb.dataset.orig || "1");
+  btn.style.display = (linkChanged || visChanged) ? "inline-flex" : "none";
 }
-
-async function setBannerActive(id, active) {
-  await api("/api/admin/banners", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, is_active: active }) });
+async function saveBannerRow(id) {
+  const inp = document.getElementById("bl_" + id);
+  const cb = document.getElementById("bv_" + id);
+  const val = inp?.value || "";
+  const active = cb ? cb.checked : true;
+  const { ok } = await api("/api/admin/banners", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, link_url: val, is_active: active }) });
+  if (ok) {
+    toast("Saved");
+    if (inp) inp.dataset.orig = val;
+    if (cb) cb.dataset.orig = active ? "1" : "0";
+    const btn = document.getElementById("blsave_" + id);
+    if (btn) btn.style.display = "none";
+  } else toast("Failed");
 }
 
 async function deleteBanner(id) {
@@ -1308,7 +1449,7 @@ async function uploadCatImg(category, input) {
   if (!input.files.length) return;
   const file = input.files[0];
   input.value = "";
-  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — used 3 ways: home tile (3:4), category banner desktop (wide 16:3) & mobile (3:2). Keep the main subject inside the dashed “safe” box so it shows on all of them.", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category", deviceCrops: [{ name: "Home tile", ratio: 3 / 4 }, { name: "Banner (desktop)", ratio: 16 / 3 }, { name: "Banner (mobile)", ratio: 3 / 2 }] },
+  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — used 3 ways. Each coloured box below shows exactly what that version will display; keep the main subject inside all of them.", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category", deviceCrops: [{ name: "Home tile (3:4)", ratio: 3 / 4 }, { name: "Banner desktop (16:3)", ratio: 16 / 3 }, { name: "Banner mobile (3:2)", ratio: 3 / 2 }] },
     async (cropped) => {
       toast("Uploading…");
       const fd = new FormData(); fd.append("file", cropped); fd.append("category", category);
@@ -1322,6 +1463,7 @@ async function uploadCatImg(category, input) {
 }
 
 async function deleteCatImg(category) {
+  if (!confirm('Remove the image for "' + category + '"?')) return;
   const { ok } = await api("/api/admin/category-images?category=" + encodeURIComponent(category), { method: "DELETE" });
   if (ok) { delete CAT_IMAGES[category]; toast("Removed"); renderCatImgList(); }
 }

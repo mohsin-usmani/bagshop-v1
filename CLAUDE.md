@@ -157,12 +157,16 @@ always written as `1`. `stockLiveInfo()` (admin.js) mirrors this rule for the st
   "Save changes" button and `saveStock()` were removed.
 - **Edit button** (✏): opens edit modal for article details, variants, photos
 
-### Add Product (3-step wizard)
+### Add Product (4-step wizard)
 - Step 1: article code, name, category (datalist), description, base price
   - **Duplicate code check**: compares against existing `ARTICLES` array before submitting,
     shows error toast and red border if duplicate found
 - Step 2: add colour/size/qty/price variants
-- Step 3: upload photos (compressed client-side before upload)
+- Step 3: "You may also like" — same picker as the Edit modal (`relatedEditorHTML`/`relSearch`/
+  `addRelated`/`removeRelated`, all shared code), reused here since the article already exists
+  in the DB by this point. Has a Skip button — both Skip and Next just move on to photos,
+  saving whatever picks were made either way (nothing to discard, it's optional either way).
+- Step 4: upload photos (compressed client-side before upload)
 
 ### Other tabs
 - Categories: create/rename/delete (rename cascades to all articles)
@@ -220,7 +224,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=30 (styles v=44)**, **product.html = v=41 (styles v=44)**, **s.html (catalogue) = v=42 (styles v=44)**
+  Current versions: **admin.html = v=36 (styles v=48)**, **product.html = v=42 (styles v=48)**, **s.html (catalogue) = v=44 (styles v=48)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

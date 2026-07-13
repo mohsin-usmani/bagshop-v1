@@ -560,6 +560,8 @@ function renderCart() {
   if (badge) { badge.textContent = count; badge.style.display = count ? 'flex' : 'none'; }
   const badgeD = document.getElementById('navdCartBadge');
   if (badgeD) { badgeD.textContent = count; badgeD.style.display = count ? 'flex' : 'none'; }
+  const emptyBtn = document.getElementById('cartEmptyBtn');
+  if (emptyBtn) emptyBtn.style.display = ids.length ? 'inline' : 'none';
   let total = 0;
   document.getElementById('cartLines').innerHTML = ids.map(id => {
     total += (CART[id].price || 0) * CART[id].qty;
@@ -677,6 +679,14 @@ function openCartProduct(id) {
 
 function removeItem(id) {
   delete CART[id]; saveCart(); renderCart(); renderPDP();
+}
+function emptyCart() {
+  if (!Object.keys(CART).length) return;
+  if (!confirm('Remove all items from your cart?')) return;
+  Object.keys(CART).forEach(id => delete CART[id]);
+  saveCart();
+  renderCart();
+  renderPDP();
 }
 function openCart()  { document.getElementById('drawer').classList.add('open'); document.body.style.overflow = 'hidden'; }
 function closeCart() { document.getElementById('drawer').classList.remove('open'); document.body.style.overflow = ''; }

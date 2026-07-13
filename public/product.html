@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Product — FinEx</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%233b4cca'/%3E%3Ctext x='50' y='69' text-anchor='middle' fill='white' font-family='Arial%2Csans-serif' font-weight='700' font-style='italic' font-size='50'%3EFx%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="/assets/styles.css?v=44">
+<link rel="stylesheet" href="/assets/styles.css?v=48">
 </head>
 <body>
 
@@ -73,7 +73,13 @@
 <!-- ── CART DRAWER ── -->
 <div class="drawer" id="drawer" onclick="if(event.target===this)closeCart()">
   <div class="sheet">
-    <div class="hd"><h3>Your order</h3><button class="sheet-close" onclick="closeCart()">✕</button></div>
+    <div class="hd">
+      <div style="display:flex;align-items:center;gap:12px">
+        <h3>Your order</h3>
+        <button class="cart-empty-btn" id="cartEmptyBtn" onclick="emptyCart()" style="display:none">Empty cart</button>
+      </div>
+      <button class="sheet-close" onclick="closeCart()">✕</button>
+    </div>
     <div id="cartLines"></div>
     <div id="cartTotal" class="cart-total-row"></div>
     <button class="btn-send-order" onclick="sendOrder()">Send Order on WhatsApp</button>
@@ -90,6 +96,6 @@
 </div>
 
 <script src="/assets/common.js?v=33"></script>
-<script src="/assets/product.js?v=41"></script>
+<script src="/assets/product.js?v=42"></script>
 </body>
 </html>
