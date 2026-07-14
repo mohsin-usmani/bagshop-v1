@@ -611,7 +611,7 @@ function startCatHeroLoop() {
   const slides = document.querySelectorAll('#catHeroMobTrack .cat-hero-mob-slide');
   if (slides.length < 2) return;
   let idx = 0;
-  CAT_HERO_TIMER = setInterval(() => { idx = (idx + 1) % slides.length; setCatHeroSlide(idx); }, 3200);
+  CAT_HERO_TIMER = setInterval(() => { idx = (idx + 1) % slides.length; setCatHeroSlide(idx); }, 2200);
 }
 function stopCatHeroLoop() { if (CAT_HERO_TIMER) { clearInterval(CAT_HERO_TIMER); CAT_HERO_TIMER = null; } }
 function initCatHeroSwipe() {
