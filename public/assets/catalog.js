@@ -678,7 +678,7 @@ function catHeroHTML() {
     const leftMobile = row.left_mobile_url || left;
     const rightMobile = row.right_mobile_url || right;
     const shop = DATA.shop || {};
-    const logo = shop.logo_url ? '<img class="cat-hero-split-logo" src="' + esc(shop.logo_url) + '" alt="' + esc(shop.name || '') + '">' : '';
+    const logo = shop.logo_url ? '<img class="cat-hero-split-logo" src="' + esc(shop.logo_url) + '" alt="' + esc(shop.name || '') + '"><span class="cat-hero-split-divider"></span>' : '';
     return '<div class="cat-hero cat-hero-split">' +
       '<div class="cat-hero-split-desktop">' +
         '<div class="cat-hero-split-photo"><img src="' + esc(leftDesktop) + '" alt="' + esc(CAT_FILTER) + '"></div>' +

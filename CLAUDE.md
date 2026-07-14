@@ -206,8 +206,10 @@ The 20s timeout in `api()` covers the worst-case cold start.
     The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
   - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style — `min-width` 390px) is a plain white
-    card showing the shop's uploaded logo (`shop.logo_url`, ~20px tall) to the left of the category
-    name — side by side (`flex-direction:row`), not stacked. The name uses the self-hosted **Anton**
+    card showing the shop's uploaded logo (`shop.logo_url`, ~24px tall), a thin vertical divider
+    (`.cat-hero-split-divider`, only rendered when a logo is set), then the category name — all in a
+    row (`flex-direction:row`), spaced by the container's `gap` so the divider sits evenly between
+    logo and name (Lenskart "lenskart | POP MART" lockup style). The name uses the self-hosted **Anton**
     display font (`/assets/fonts/Anton-Regular.woff2`, `@font-face` in styles.css, 32px, letter-spacing
     3px) to match a bold block-letter logotype look (e.g. Lenskart's "POP MART" banner) — matches the
     project's existing pattern of self-hosting fonts (GT-America, Gotham) rather than pulling from
@@ -274,7 +276,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=47 (styles v=59)**, **product.html = v=42 (styles v=59)**, **s.html (catalogue) = v=47 (styles v=59)**
+  Current versions: **admin.html = v=47 (styles v=60)**, **product.html = v=42 (styles v=60)**, **s.html (catalogue) = v=48 (styles v=60)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
