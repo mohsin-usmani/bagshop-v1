@@ -638,14 +638,18 @@ function catHeroHTML() {
 
   if (left && right) {
     // Desktop: the two photos side by side with the category name in the gap
-    // between them. Mobile: just the admin's chosen single photo, with a
-    // small label over a light gradient (not the old giant centred text).
+    // between them — each uses its own independently-framed "desktop" crop
+    // (falls back to the plain upload if that crop wasn't set). Mobile: just
+    // the admin's chosen single photo, with a small label over a light
+    // gradient (not the old giant centred text).
     const mobileUrl = row.mobile_url || left;
+    const leftDesktop = row.left_desktop_url || left;
+    const rightDesktop = row.right_desktop_url || right;
     return '<div class="cat-hero cat-hero-split">' +
       '<div class="cat-hero-split-desktop">' +
-        '<div class="cat-hero-split-photo"><img src="' + esc(left) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+        '<div class="cat-hero-split-photo"><img src="' + esc(leftDesktop) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
         '<div class="cat-hero-split-mid"><div class="cat-hero-name">' + name + '</div></div>' +
-        '<div class="cat-hero-split-photo"><img src="' + esc(right) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+        '<div class="cat-hero-split-photo"><img src="' + esc(rightDesktop) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
       '</div>' +
       '<div class="cat-hero-mobile">' +
         '<img class="cat-hero-mobile-img" src="' + esc(mobileUrl) + '" alt="' + esc(CAT_FILTER) + '">' +

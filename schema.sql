@@ -82,14 +82,21 @@ CREATE TABLE IF NOT EXISTS banners (
 -- one is the admin's choice, stored in mobile_source/tile_source ('left'/'right').
 -- Legacy image_key/image_url are kept (unused) rather than dropped — SQLite
 -- can't cheaply drop columns, and older rows may still have data there.
+-- {side}_variants_json holds independently-framed crops of that one uploaded
+-- photo for each placement, e.g. {"tile":{"key":..,"url":..},"mobile":{...},
+-- "desktop":{...}} — admin can drag/zoom each placement separately in the
+-- cropper instead of one shared crop. {side}_image_url/key (legacy, still
+-- written by very old rows) is the fallback when a variant isn't set yet.
 CREATE TABLE IF NOT EXISTS category_images (
-  category        TEXT PRIMARY KEY,
-  image_key       TEXT,
-  image_url       TEXT,
-  left_image_key  TEXT,
-  left_image_url  TEXT,
-  right_image_key TEXT,
-  right_image_url TEXT,
+  category           TEXT PRIMARY KEY,
+  image_key          TEXT,
+  image_url          TEXT,
+  left_image_key     TEXT,
+  left_image_url     TEXT,
+  right_image_key    TEXT,
+  right_image_url    TEXT,
+  left_variants_json  TEXT,
+  right_variants_json TEXT,
   mobile_source   TEXT NOT NULL DEFAULT 'left',
   tile_source     TEXT NOT NULL DEFAULT 'left'
 );

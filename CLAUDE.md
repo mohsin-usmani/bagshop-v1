@@ -199,18 +199,27 @@ The 20s timeout in `api()` covers the worst-case cold start.
 `banners(id, url, link, sort_order, created_at)`
 `categories(id, name, created_at)`
 `category_images(category PK, image_key, image_url [legacy, unused], left_image_key, left_image_url,
-  right_image_key, right_image_url, mobile_source, tile_source)`
-  - Two photos per category (Left/Right, ~4:5). Desktop category page shows both side by side with the
+  right_image_key, right_image_url, left_variants_json, right_variants_json, mobile_source, tile_source)`
+  - Two photos per category (Left/Right). Desktop category page shows both side by side with the
     category name in the gap (`.cat-hero-split`); mobile shows one photo only — `mobile_source`
     ('left'/'right') picks which — with a small label over a light bottom gradient (`.cat-hero-mobile`).
     The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
-    Admin UI: Banners tab → Category Images, two upload slots per category (`renderCatImgList` in
-    admin.js), each opening the crop tool with `deviceCrops` guides for Mobile (3:2) and Tile (3:4).
+  - **Per-target independent framing:** each of the two uploaded photos can be cropped differently
+    for each of its 3 placements (Desktop header 2:1, Mobile header 3:2, Homepage tile 3:4) instead of
+    one shared centred crop. `{side}_variants_json` stores `{tile:{key,url}, mobile:{...}, desktop:{...}}`.
+    Admin UI: Banners tab → Category Images → Upload/Replace opens the cropper in `perTargetAdjust`
+    mode (`openCropper` in admin.js) — tabs (`CAT_IMG_TARGETS`) switch which placement's own
+    drag/zoom state is being edited; "Save all" generates and uploads all 3 crops in one go
+    (`uploadCatImg`, one POST per target with a `target` field). `{side}_image_url/key` (legacy) is
+    kept as a fallback only — new uploads write solely into `{side}_variants_json`. Frontend
+    (`functions/api/catalog.js`) resolves each placement from variants first, legacy url second.
   - Migration note: the original `image_key`/`image_url` columns had `NOT NULL` — SQLite can't drop
     that via `ALTER TABLE`, so if this table is ever migrated again, rebuild it (`CREATE TABLE ... new`
     → `INSERT ... SELECT` → `DROP` → `RENAME`) rather than just adding columns, or `INSERT ... ON
     CONFLICT DO UPDATE` will fail with `NOT NULL constraint failed: category_images.image_key`.
+    `{side}_variants_json` columns were added later via plain `ALTER TABLE ... ADD COLUMN` (nullable,
+    no default) — safe, no rebuild needed.
 
 ## Cloudflare environment variables (Pages → Settings → Environment Variables)
 
@@ -236,7 +245,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=40 (styles v=52)**, **product.html = v=42 (styles v=52)**, **s.html (catalogue) = v=45 (styles v=52)**
+  Current versions: **admin.html = v=41 (styles v=53)**, **product.html = v=42 (styles v=53)**, **s.html (catalogue) = v=46 (styles v=53)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

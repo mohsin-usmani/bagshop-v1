@@ -139,10 +139,16 @@ async function removeBranding(kind) {
 // openCropper(file, opts, onDone, onCancel)
 //   opts: { ratio (w/h), title, ratioLabel, maxEdge, type, quality, name,
 //           deviceCrops:[{name,ratio}] — optional; draws one colour-coded box
-//           per device (+ a legend) showing exactly what each one will show }
-//   onDone(File)  — the cropped (or original) image, ready to upload
+//           per device (+ a legend) showing exactly what each one will show.
+//           perTargetAdjust:true — instead of one shared crop with preview
+//           boxes, each deviceCrops entry (needs a `key`) gets its OWN
+//           independently draggable/zoomable frame, switched via tabs; the
+//           photo can be framed differently for each placement. }
+//   onDone(File)                          — normal mode
+//   onDone({ [key]: File, ... })          — perTargetAdjust mode
 function openCropper(file, opts, onDone, onCancel) {
-  const ratio = opts.ratio || 1;
+  const perTarget = !!(opts.perTargetAdjust && Array.isArray(opts.deviceCrops) && opts.deviceCrops.length);
+  const ratio = opts.ratio || (perTarget ? opts.deviceCrops[0].ratio : 1);
   const maxEdge = opts.maxEdge || 1400;
   const type = opts.type || "image/jpeg";
   const quality = opts.quality != null ? opts.quality : 0.85;
@@ -153,18 +159,26 @@ function openCropper(file, opts, onDone, onCancel) {
   img.onload = () => {
     const natW = img.naturalWidth, natH = img.naturalHeight;
     const MAXW = Math.min(520, window.innerWidth - 60);
-    // The legend row (when deviceCrops is set) adds real height above the
+    // The legend/tabs row (when deviceCrops is set) adds real height above the
     // stage, so it needs a bigger chrome reservation than the plain cropper —
     // otherwise the stage claims space the footer's Cancel/Crop&use buttons
     // needed, and they get clipped below the dialog's max-height.
     const chromeReserve = (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) ? 320 : 250;
     const MAXH = Math.min(430, window.innerHeight - chromeReserve);
-    let fw = MAXW, fh = fw / ratio;
-    if (fh > MAXH) { fh = MAXH; fw = fh * ratio; }
-    fw = Math.round(fw); fh = Math.round(fh);
+    const CROP_DEVICE_COLORS = ["#e0a03c", "#3fb0e0", "#e05a5a", "#7bd48d"];
 
-    const baseScale = Math.max(fw / natW, fh / natH);
-    let scale = baseScale, ox = (fw - natW * scale) / 2, oy = (fh - natH * scale) / 2;
+    function fitFrame(r) {
+      let fw = MAXW, fh = fw / r;
+      if (fh > MAXH) { fh = MAXH; fw = fh * r; }
+      return { fw: Math.round(fw), fh: Math.round(fh) };
+    }
+    function centeredState(r) {
+      const { fw, fh } = fitFrame(r);
+      const baseScale = Math.max(fw / natW, fh / natH);
+      return { fw, fh, baseScale, scale: baseScale, ox: (fw - natW * baseScale) / 2, oy: (fh - natH * baseScale) / 2 };
+    }
+
+    const { fw, fh } = fitFrame(ratio);
 
     const modal = document.createElement("div");
     modal.className = "crop-modal";
@@ -172,8 +186,9 @@ function openCropper(file, opts, onDone, onCancel) {
       '<div class="crop-dialog">' +
         '<div class="crop-head"><span class="crop-title">' + esc(opts.title || "Crop image") + '</span>' +
           '<button class="crop-x" aria-label="Close">✕</button></div>' +
-        (opts.ratioLabel ? '<div class="crop-note">' + esc(opts.ratioLabel) + ' — drag to reposition, use the slider to zoom.</div>' : '') +
-        (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length ? '<div class="crop-legend" id="cropLegend"></div>' : '') +
+        (opts.ratioLabel ? '<div class="crop-note">' + esc(opts.ratioLabel) + (perTarget ? ' — pick a tab below, then drag to reposition and use the slider to zoom just that one.' : ' — drag to reposition, use the slider to zoom.') + '</div>' : '') +
+        (perTarget ? '<div class="crop-tabs" id="cropTabs"></div>'
+          : (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length ? '<div class="crop-legend" id="cropLegend"></div>' : '')) +
         '<div class="crop-stage" style="width:' + fw + 'px;height:' + fh + 'px">' +
           '<img alt=""><div class="crop-grid"></div>' +
         '</div>' +
@@ -183,10 +198,10 @@ function openCropper(file, opts, onDone, onCancel) {
           '<span style="font-size:16px">+</span>' +
         '</div>' +
         '<div class="crop-foot">' +
-          '<button class="btn ghost sm crop-original">Use original</button>' +
+          (perTarget ? '' : '<button class="btn ghost sm crop-original">Use original</button>') +
           '<div style="flex:1"></div>' +
           '<button class="btn ghost sm crop-cancel">Cancel</button>' +
-          '<button class="btn crop-apply">Crop &amp; use</button>' +
+          '<button class="btn crop-apply">' + (perTarget ? "Save all" : "Crop &amp; use") + '</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -199,80 +214,132 @@ function openCropper(file, opts, onDone, onCancel) {
     imgEl.style.width = natW + "px";
     imgEl.style.height = natH + "px";
 
-    // Responsive crop guides: the same photo is shown at different aspect
-    // ratios per device (object-fit:cover), so each one keeps a different
-    // region and cuts the rest. Draw one dashed box per device, colour-coded
-    // and explained in the legend, instead of a single unlabeled "safe" box —
-    // so the admin can see exactly what each device will show, not just the
-    // intersection of all of them.
-    const CROP_DEVICE_COLORS = ["#e0a03c", "#3fb0e0", "#e05a5a", "#7bd48d"];
-    if (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) {
-      // Sort widest-inset-first (tightest crop last) so the tightest box's dim
-      // overlay sits on top and doesn't hide a looser box drawn after it.
-      const withInsets = opts.deviceCrops.map((dc) => {
-        let insetX = 0, insetY = 0;
-        if (dc.ratio > ratio)      insetY = (1 - ratio / dc.ratio) / 2; // wider device → top/bottom cut
-        else if (dc.ratio < ratio) insetX = (1 - dc.ratio / ratio) / 2; // narrower device → sides cut
-        return { ...dc, insetX, insetY, area: (1 - 2 * insetX) * (1 - 2 * insetY) };
-      });
-      withInsets.sort((a, b) => b.area - a.area); // largest box first, tightest last
-      const legend = document.getElementById("cropLegend");
-      withInsets.forEach((dc, i) => {
-        const color = CROP_DEVICE_COLORS[i % CROP_DEVICE_COLORS.length];
-        const box = document.createElement("div");
-        box.className = "crop-device-box" + (i === withInsets.length - 1 ? " crop-tightest" : "");
-        box.style.left = box.style.right = (dc.insetX * 100) + "%";
-        box.style.top = box.style.bottom = (dc.insetY * 100) + "%";
-        box.style.borderColor = color;
-        stage.appendChild(box);
-        if (legend) {
-          const item = document.createElement("span");
-          item.className = "crop-legend-item";
-          item.innerHTML = '<span class="crop-legend-dot" style="background:' + color + '"></span>' + esc(dc.name);
-          legend.appendChild(item);
-        }
-      });
+    function clamp(st) {
+      const dw = natW * st.scale, dh = natH * st.scale;
+      st.ox = Math.min(0, Math.max(st.fw - dw, st.ox));
+      st.oy = Math.min(0, Math.max(st.fh - dh, st.oy));
+    }
+    function render(st) { imgEl.style.transform = "translate(" + st.ox + "px," + st.oy + "px) scale(" + st.scale + ")"; }
+    function setZoom(st, z) {
+      const ix = (st.fw / 2 - st.ox) / st.scale, iy = (st.fh / 2 - st.oy) / st.scale;
+      st.scale = st.baseScale * z;
+      st.ox = st.fw / 2 - ix * st.scale; st.oy = st.fh / 2 - iy * st.scale;
+      clamp(st); render(st);
     }
 
-    function clamp() {
-      const dw = natW * scale, dh = natH * scale;
-      ox = Math.min(0, Math.max(fw - dw, ox));
-      oy = Math.min(0, Math.max(fh - dh, oy));
+    let active; // current live state object — { fw, fh, baseScale, scale, ox, oy }
+
+    if (perTarget) {
+      // Independent crop per placement: one state object per target key,
+      // created lazily (centred/fit) the first time its tab is opened.
+      const states = {};
+      let activeKey = opts.deviceCrops[0].key;
+      const tabsEl = document.getElementById("cropTabs");
+      const tabBtns = {};
+      opts.deviceCrops.forEach((dc, i) => {
+        const color = CROP_DEVICE_COLORS[i % CROP_DEVICE_COLORS.length];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "crop-tab";
+        btn.innerHTML = '<span class="crop-legend-dot" style="background:' + color + '"></span>' + esc(dc.name);
+        btn.onclick = () => selectTab(dc.key);
+        tabsEl.appendChild(btn);
+        tabBtns[dc.key] = btn;
+      });
+      function selectTab(key) {
+        activeKey = key;
+        const dc = opts.deviceCrops.find((d) => d.key === key);
+        if (!states[key]) states[key] = centeredState(dc.ratio);
+        active = states[key];
+        Object.keys(tabBtns).forEach((k) => tabBtns[k].classList.toggle("on", k === key));
+        stage.style.width = active.fw + "px"; stage.style.height = active.fh + "px";
+        zoom.value = active.scale / active.baseScale;
+        clamp(active); render(active);
+      }
+      selectTab(activeKey);
+
+      modal.querySelector(".crop-apply").onclick = () => {
+        // Make sure every target has a state (tabs never opened default to centred).
+        opts.deviceCrops.forEach((dc) => { if (!states[dc.key]) states[dc.key] = centeredState(dc.ratio); });
+        const entries = opts.deviceCrops.map((dc) => {
+          const st = states[dc.key];
+          return exportRegion(-st.ox / st.scale, -st.oy / st.scale, st.fw / st.scale, st.fh / st.scale, dc.key);
+        });
+        Promise.all(entries).then((files) => {
+          const out = {};
+          opts.deviceCrops.forEach((dc, i) => { out[dc.key] = files[i]; });
+          cleanup(); onDone(out);
+        });
+      };
+    } else {
+      active = { fw, fh, baseScale: Math.max(fw / natW, fh / natH), ox: 0, oy: 0, scale: 1 };
+      active.scale = active.baseScale;
+      active.ox = (fw - natW * active.scale) / 2; active.oy = (fh - natH * active.scale) / 2;
+
+      // Responsive crop guides: the same photo is shown at different aspect
+      // ratios per device (object-fit:cover), so each one keeps a different
+      // region and cuts the rest. Draw one dashed box per device, colour-coded
+      // and explained in the legend — so the admin can see exactly what each
+      // device will show, not just the intersection of all of them.
+      if (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) {
+        const withInsets = opts.deviceCrops.map((dc) => {
+          let insetX = 0, insetY = 0;
+          if (dc.ratio > ratio)      insetY = (1 - ratio / dc.ratio) / 2; // wider device → top/bottom cut
+          else if (dc.ratio < ratio) insetX = (1 - dc.ratio / ratio) / 2; // narrower device → sides cut
+          return { ...dc, insetX, insetY, area: (1 - 2 * insetX) * (1 - 2 * insetY) };
+        });
+        withInsets.sort((a, b) => b.area - a.area); // largest box first, tightest last
+        const legend = document.getElementById("cropLegend");
+        withInsets.forEach((dc, i) => {
+          const color = CROP_DEVICE_COLORS[i % CROP_DEVICE_COLORS.length];
+          const box = document.createElement("div");
+          box.className = "crop-device-box" + (i === withInsets.length - 1 ? " crop-tightest" : "");
+          box.style.left = box.style.right = (dc.insetX * 100) + "%";
+          box.style.top = box.style.bottom = (dc.insetY * 100) + "%";
+          box.style.borderColor = color;
+          stage.appendChild(box);
+          if (legend) {
+            const item = document.createElement("span");
+            item.className = "crop-legend-item";
+            item.innerHTML = '<span class="crop-legend-dot" style="background:' + color + '"></span>' + esc(dc.name);
+            legend.appendChild(item);
+          }
+        });
+      }
+
+      modal.querySelector(".crop-apply").onclick = () =>
+        exportRegion(-active.ox / active.scale, -active.oy / active.scale, active.fw / active.scale, active.fh / active.scale)
+          .then((out) => { cleanup(); onDone(out); });
+      modal.querySelector(".crop-original").onclick = () =>
+        exportRegion(0, 0, natW, natH).then((out) => { cleanup(); onDone(out); });
     }
-    function render() { imgEl.style.transform = "translate(" + ox + "px," + oy + "px) scale(" + scale + ")"; }
-    function setZoom(z) {
-      const ix = (fw / 2 - ox) / scale, iy = (fh / 2 - oy) / scale;
-      scale = baseScale * z;
-      ox = fw / 2 - ix * scale; oy = fh / 2 - iy * scale;
-      clamp(); render();
-    }
-    clamp(); render();
+
+    clamp(active); render(active);
 
     let dragging = false, px = 0, py = 0;
     stage.addEventListener("pointerdown", (e) => { dragging = true; px = e.clientX; py = e.clientY; stage.setPointerCapture(e.pointerId); });
-    stage.addEventListener("pointermove", (e) => { if (!dragging) return; ox += e.clientX - px; oy += e.clientY - py; px = e.clientX; py = e.clientY; clamp(); render(); });
+    stage.addEventListener("pointermove", (e) => { if (!dragging) return; active.ox += e.clientX - px; active.oy += e.clientY - py; px = e.clientX; py = e.clientY; clamp(active); render(active); });
     const stop = (e) => { dragging = false; try { stage.releasePointerCapture(e.pointerId); } catch (_) {} };
     stage.addEventListener("pointerup", stop);
     stage.addEventListener("pointercancel", stop);
-    zoom.addEventListener("input", () => setZoom(parseFloat(zoom.value)));
-    stage.addEventListener("wheel", (e) => { e.preventDefault(); const z = Math.min(4, Math.max(1, parseFloat(zoom.value) + (e.deltaY < 0 ? 0.12 : -0.12))); zoom.value = z; setZoom(z); }, { passive: false });
+    zoom.addEventListener("input", () => setZoom(active, parseFloat(zoom.value)));
+    stage.addEventListener("wheel", (e) => { e.preventDefault(); const z = Math.min(4, Math.max(1, parseFloat(zoom.value) + (e.deltaY < 0 ? 0.12 : -0.12))); zoom.value = z; setZoom(active, z); }, { passive: false });
 
     function cleanup() { URL.revokeObjectURL(objURL); modal.remove(); document.body.style.overflow = ""; }
-    function exportRegion(sx, sy, sw, sh) {
+    function exportRegion(sx, sy, sw, sh, name) {
       let ow = sw, oh = sh, m = Math.max(ow, oh);
       if (m > maxEdge) { const k = maxEdge / m; ow *= k; oh *= k; }
       ow = Math.max(1, Math.round(ow)); oh = Math.max(1, Math.round(oh));
       const c = document.createElement("canvas"); c.width = ow; c.height = oh;
       c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, ow, oh);
-      c.toBlob((blob) => {
-        const ext = type === "image/png" ? ".png" : ".jpg";
-        const out = new File([blob], (opts.name || "image") + ext, { type });
-        cleanup(); onDone(out);
-      }, type, quality);
+      return new Promise((resolve) => {
+        c.toBlob((blob) => {
+          const ext = type === "image/png" ? ".png" : ".jpg";
+          resolve(new File([blob], (opts.name || "image") + (name ? "-" + name : "") + ext, { type }));
+        }, type, quality);
+      });
     }
 
-    modal.querySelector(".crop-apply").onclick = () => exportRegion(-ox / scale, -oy / scale, fw / scale, fh / scale);
-    modal.querySelector(".crop-original").onclick = () => exportRegion(0, 0, natW, natH);
     const cancel = () => { cleanup(); if (onCancel) onCancel(); };
     modal.querySelector(".crop-cancel").onclick = cancel;
     modal.querySelector(".crop-x").onclick = cancel;
@@ -1438,6 +1505,16 @@ async function deleteBanner(id) {
 // side-by-side with the category name in the gap; the admin picks which one
 // (Left or Right) feeds the mobile header and which one feeds the homepage
 // tile — so the same two uploads cover every placement.
+// Best single thumbnail for a side: prefer the independently-framed "tile"
+// crop (closest to a portrait preview), then mobile/desktop, then the legacy
+// plain upload — mirrors the fallback order the customer site uses.
+function catImgThumb(row, side) {
+  if (row[side + "_image_url"]) return row[side + "_image_url"];
+  let variants = {};
+  try { variants = JSON.parse(row[side + "_variants_json"] || "{}") || {}; } catch (e) {}
+  return (variants.tile && variants.tile.url) || (variants.mobile && variants.mobile.url) || (variants.desktop && variants.desktop.url) || "";
+}
+
 function renderCatImgList() {
   const el = document.getElementById("catImgList");
   if (!el) return;
@@ -1445,8 +1522,8 @@ function renderCatImgList() {
   if (!cats.length) { el.innerHTML = '<p class="muted">No categories yet. Add articles first.</p>'; return; }
   el.innerHTML = cats.map(c => {
     const row = CAT_IMAGES[c] || {};
-    const left = row.left_image_url || "";
-    const right = row.right_image_url || "";
+    const left = catImgThumb(row, "left");
+    const right = catImgThumb(row, "right");
     const mobileSrc = row.mobile_source === "right" ? "right" : "left";
     const tileSrc = row.tile_source === "right" ? "right" : "left";
     const hasBoth = !!(left && right);
@@ -1485,23 +1562,40 @@ function renderCatImgList() {
   }).join('');
 }
 
+// One uploaded photo, three independently-framed crops (tile/mobile/desktop) —
+// the admin picks a tab in the cropper and drags/zooms just that placement,
+// so e.g. the wide desktop header can be framed differently from the tall
+// homepage tile instead of relying on one shared centred crop for both.
+const CAT_IMG_TARGETS = [
+  { key: "desktop", name: "Desktop header (2:1)", ratio: 2 / 1 },
+  { key: "mobile", name: "Mobile header (3:2)", ratio: 3 / 2 },
+  { key: "tile", name: "Homepage tile (3:4)", ratio: 3 / 4 },
+];
+
 async function uploadCatImg(category, side, input) {
   if (!input.files.length) return;
   const file = input.files[0];
   input.value = "";
   openCropper(file, {
-    ratio: 4 / 5, title: "Crop category photo (" + (side === "right" ? "Right" : "Left") + ")",
-    ratioLabel: "This photo is shown at a few sizes — each coloured box below shows exactly what that version will display; keep the main subject inside all of them.",
+    perTargetAdjust: true,
+    title: "Crop category photo (" + (side === "right" ? "Right" : "Left") + ")",
+    ratioLabel: "This photo is shown at a few sizes — frame each one separately so the subject looks right everywhere.",
     maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category-" + side,
-    deviceCrops: [{ name: "Desktop header (2:1)", ratio: 2 / 1 }, { name: "Mobile header (3:2)", ratio: 3 / 2 }, { name: "Homepage tile (3:4)", ratio: 3 / 4 }],
-  }, async (cropped) => {
+    deviceCrops: CAT_IMG_TARGETS,
+  }, async (files) => {
     toast("Uploading…");
-    const fd = new FormData(); fd.append("file", cropped); fd.append("category", category); fd.append("side", side);
-    const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
-    if (!res.ok) return toast("Upload failed");
-    const data = await res.json();
     if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category, mobile_source: "left", tile_source: "left" };
-    CAT_IMAGES[category][side + "_image_url"] = data.image_url;
+    let lastUrl = "";
+    for (const dc of CAT_IMG_TARGETS) {
+      const fd = new FormData();
+      fd.append("file", files[dc.key]); fd.append("category", category); fd.append("side", side); fd.append("target", dc.key);
+      const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
+      if (!res.ok) { toast("Upload failed"); renderCatImgList(); return; }
+      const data = await res.json();
+      lastUrl = data.image_url;
+    }
+    // Keep a plain fallback url too (used for admin thumbnails / older code paths).
+    CAT_IMAGES[category][side + "_image_url"] = lastUrl;
     toast("Photo saved");
     renderCatImgList();
   });
@@ -1511,7 +1605,7 @@ async function deleteCatImg(category, side) {
   if (!confirm("Remove the " + side + " photo for \"" + category + "\"?")) return;
   const { ok } = await api("/api/admin/category-images?category=" + encodeURIComponent(category) + "&side=" + encodeURIComponent(side), { method: "DELETE" });
   if (ok) {
-    if (CAT_IMAGES[category]) CAT_IMAGES[category][side + "_image_url"] = "";
+    if (CAT_IMAGES[category]) { CAT_IMAGES[category][side + "_image_url"] = ""; CAT_IMAGES[category][side + "_variants_json"] = ""; }
     toast("Removed");
     renderCatImgList();
   } else toast("Failed");

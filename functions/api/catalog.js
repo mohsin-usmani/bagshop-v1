@@ -1,5 +1,10 @@
 import { json, validToken, getSettings } from "./_util.js";
 
+function parseVariants(json_str) {
+  if (!json_str) return {};
+  try { return JSON.parse(json_str) || {}; } catch (e) { return {}; }
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -49,16 +54,33 @@ export async function onRequestGet(context) {
 
   // Two photos per category (left/right) — the desktop header shows both side
   // by side; the admin's mobile_source/tile_source picks which single one
-  // feeds the mobile header and the homepage tile respectively.
+  // feeds the mobile header and the homepage tile respectively. Each photo can
+  // also have its OWN independently-framed crop per placement (stored in
+  // {side}_variants_json) instead of one shared crop — fall back to the plain
+  // upload when a placement hasn't been individually framed yet.
   const category_images = {};
   for (const r of catImgRows) {
-    const left = r.left_image_url || r.image_url || "";
-    const right = r.right_image_url || "";
+    const leftVariants = parseVariants(r.left_variants_json);
+    const rightVariants = parseVariants(r.right_variants_json);
+    const leftPlain = r.left_image_url || r.image_url || "";
+    const rightPlain = r.right_image_url || "";
+    const left = (leftVariants.tile && leftVariants.tile.url) || leftPlain;
+    const right = (rightVariants.tile && rightVariants.tile.url) || rightPlain;
+    const leftDesktop = (leftVariants.desktop && leftVariants.desktop.url) || leftPlain;
+    const rightDesktop = (rightVariants.desktop && rightVariants.desktop.url) || rightPlain;
+    const mobileRight = r.mobile_source === "right";
+    const tileRight = r.tile_source === "right";
+    const mobileVariants = mobileRight ? rightVariants : leftVariants;
+    const tileVariants = tileRight ? rightVariants : leftVariants;
+    const mobileFallback = (mobileRight ? rightPlain : leftPlain) || right || left;
+    const tileFallback = (tileRight ? rightPlain : leftPlain) || right || left;
     category_images[r.category] = {
       left_url: left,
       right_url: right,
-      mobile_url: (r.mobile_source === "right" ? right : left) || right,
-      tile_url: (r.tile_source === "right" ? right : left) || right,
+      left_desktop_url: leftDesktop,
+      right_desktop_url: rightDesktop,
+      mobile_url: (mobileVariants.mobile && mobileVariants.mobile.url) || mobileFallback,
+      tile_url: (tileVariants.tile && tileVariants.tile.url) || tileFallback,
     };
   }
 
