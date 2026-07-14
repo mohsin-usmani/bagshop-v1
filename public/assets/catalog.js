@@ -505,11 +505,12 @@ function catTilesHTML() {
   return '<div class="cat-section">' +
     '<div class="section-head"><h2>Our Collections</h2><p>Shop by Category</p></div>' +
     '<div class="cat-tiles">' +
-      cats.map(c =>
-        '<div class="cat-tile" onclick="goCategory(\'' + jq(c) + '\')">' +
+      cats.map(c => {
+        const tileUrl = (catImages[c] || {}).tile_url || '';
+        return '<div class="cat-tile" onclick="goCategory(\'' + jq(c) + '\')">' +
           '<div class="cat-tile-img">' +
-            (catImages[c]
-              ? '<img src="' + esc(catImages[c]) + '" alt="' + esc(c) + '" loading="lazy">'
+            (tileUrl
+              ? '<img src="' + esc(tileUrl) + '" alt="' + esc(c) + '" loading="lazy">'
               : '<div class="cat-tile-placeholder">' + esc(c[0]) + '</div>'
             ) +
           '</div>' +
@@ -518,8 +519,8 @@ function catTilesHTML() {
             '<div class="cat-tile-name">' + esc(c) + '</div>' +
             '<div class="cat-tile-shop">Shop Now →</div>' +
           '</div>' +
-        '</div>'
-      ).join('') +
+        '</div>';
+      }).join('') +
     '</div>' +
   '</div>';
 }
@@ -623,12 +624,43 @@ function catHeroHTML() {
   }
   if (!CAT_FILTER) return '';
   const catImages = DATA.category_images || {};
-  const img = catImages[CAT_FILTER];
-  return '<div class="cat-hero' + (img ? '' : ' cat-hero-plain') + '">' +
-    (img ? '<img class="cat-hero-img" src="' + esc(img) + '" alt="' + esc(CAT_FILTER) + '">' : '') +
-    '<div class="cat-hero-text">' +
-      '<div class="cat-hero-name">' + esc(CAT_FILTER.toUpperCase()) + '</div>' +
-    '</div>' +
+  const row = catImages[CAT_FILTER] || {};
+  const left = row.left_url || '';
+  const right = row.right_url || '';
+  const name = esc(CAT_FILTER.toUpperCase());
+
+  if (!left && !right) {
+    // No photos at all — same on-brand coloured band as before.
+    return '<div class="cat-hero cat-hero-plain">' +
+      '<div class="cat-hero-text"><div class="cat-hero-name">' + name + '</div></div>' +
+    '</div>';
+  }
+
+  if (left && right) {
+    // Desktop: the two photos side by side with the category name in the gap
+    // between them. Mobile: just the admin's chosen single photo, with a
+    // small label over a light gradient (not the old giant centred text).
+    const mobileUrl = row.mobile_url || left;
+    return '<div class="cat-hero cat-hero-split">' +
+      '<div class="cat-hero-split-desktop">' +
+        '<div class="cat-hero-split-photo"><img src="' + esc(left) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+        '<div class="cat-hero-split-mid"><div class="cat-hero-name">' + name + '</div></div>' +
+        '<div class="cat-hero-split-photo"><img src="' + esc(right) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+      '</div>' +
+      '<div class="cat-hero-mobile">' +
+        '<img class="cat-hero-mobile-img" src="' + esc(mobileUrl) + '" alt="' + esc(CAT_FILTER) + '">' +
+        '<div class="cat-hero-mobile-overlay"></div>' +
+        '<div class="cat-hero-mobile-label">' + name + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Only one photo uploaded (no Right yet) — same single-photo look as before,
+  // shown on both desktop and mobile since there's nothing to split.
+  const only = left || right;
+  return '<div class="cat-hero">' +
+    '<img class="cat-hero-img" src="' + esc(only) + '" alt="' + esc(CAT_FILTER) + '">' +
+    '<div class="cat-hero-text"><div class="cat-hero-name">' + name + '</div></div>' +
   '</div>';
 }
 

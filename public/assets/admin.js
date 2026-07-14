@@ -47,6 +47,12 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   if (!t) return;
   document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === t));
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + t.dataset.p));
+  // Category Images lives on the Banners tab but is only ever (re)painted
+  // right after an upload/selection change within the same session — switching
+  // away and back (or just having left it loaded a while) showed stale state,
+  // e.g. the Left/Right selector missing even once both photos existed.
+  // Re-fetch + repaint every time this tab is opened so it's always current.
+  if (t.dataset.p === "banners") loadBanners();
 });
 
 async function loadAll() {
@@ -132,8 +138,8 @@ async function removeBranding(kind) {
 // ---- image cropper (fixed-ratio frame; drag + zoom the image inside it) ----
 // openCropper(file, opts, onDone, onCancel)
 //   opts: { ratio (w/h), title, ratioLabel, maxEdge, type, quality, name,
-//           deviceCrops:[{name,ratio}] — optional; draws a "safe area" showing
-//           what stays visible across those target aspect ratios }
+//           deviceCrops:[{name,ratio}] — optional; draws one colour-coded box
+//           per device (+ a legend) showing exactly what each one will show }
 //   onDone(File)  — the cropped (or original) image, ready to upload
 function openCropper(file, opts, onDone, onCancel) {
   const ratio = opts.ratio || 1;
@@ -147,7 +153,12 @@ function openCropper(file, opts, onDone, onCancel) {
   img.onload = () => {
     const natW = img.naturalWidth, natH = img.naturalHeight;
     const MAXW = Math.min(520, window.innerWidth - 60);
-    const MAXH = Math.min(430, window.innerHeight - 250);
+    // The legend row (when deviceCrops is set) adds real height above the
+    // stage, so it needs a bigger chrome reservation than the plain cropper —
+    // otherwise the stage claims space the footer's Cancel/Crop&use buttons
+    // needed, and they get clipped below the dialog's max-height.
+    const chromeReserve = (Array.isArray(opts.deviceCrops) && opts.deviceCrops.length) ? 320 : 250;
+    const MAXH = Math.min(430, window.innerHeight - chromeReserve);
     let fw = MAXW, fh = fw / ratio;
     if (fh > MAXH) { fh = MAXH; fw = fh * ratio; }
     fw = Math.round(fw); fh = Math.round(fh);
@@ -306,7 +317,7 @@ async function loadArticles() {
   ARTICLES = (artRes.data.articles || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
   const rows = (catImgRes.data && catImgRes.data.category_images) || [];
   CAT_IMAGES = {};
-  rows.forEach(r => { CAT_IMAGES[r.category] = r.image_url; });
+  rows.forEach(r => { CAT_IMAGES[r.category] = r; }); // full row: left/right urls + mobile_source/tile_source
   renderStock(); renderCatList();
   if (EDIT_MODAL_AID) refreshEditModal();
 }
@@ -1423,49 +1434,97 @@ async function deleteBanner(id) {
 }
 
 // ---- category images ----
+// Two photos per category (Left/Right, both ~4:5). Desktop shows both
+// side-by-side with the category name in the gap; the admin picks which one
+// (Left or Right) feeds the mobile header and which one feeds the homepage
+// tile — so the same two uploads cover every placement.
 function renderCatImgList() {
   const el = document.getElementById("catImgList");
   if (!el) return;
   const cats = [...new Set(ARTICLES.map(a => a.category).filter(Boolean))];
   if (!cats.length) { el.innerHTML = '<p class="muted">No categories yet. Add articles first.</p>'; return; }
   el.innerHTML = cats.map(c => {
-    const img = CAT_IMAGES[c];
+    const row = CAT_IMAGES[c] || {};
+    const left = row.left_image_url || "";
+    const right = row.right_image_url || "";
+    const mobileSrc = row.mobile_source === "right" ? "right" : "left";
+    const tileSrc = row.tile_source === "right" ? "right" : "left";
+    const hasBoth = !!(left && right);
+
+    const slot = (side, url) =>
+      '<div class="cat-img-slot">' +
+        '<div class="cat-img-thumb">' +
+          (url ? '<img src="' + esc(url) + '" alt="' + esc(c) + ' ' + side + '">' : '<div class="cat-img-empty">No photo</div>') +
+        '</div>' +
+        '<div class="cat-img-slot-foot">' +
+          '<span class="cat-img-slot-label">' + (side === "left" ? "Left" : "Right") + '</span>' +
+          '<label class="btn sm ghost" style="cursor:pointer;margin:0">' + (url ? "Replace" : "Upload") +
+            '<input type="file" accept="image/*" style="display:none;width:0" onchange="uploadCatImg(' + jq(c) + ',' + jq(side) + ',this)"></label>' +
+          (url ? '<button class="btn danger sm" onclick="deleteCatImg(' + jq(c) + ',' + jq(side) + ')">✕</button>' : '') +
+        '</div>' +
+      '</div>';
+
+    const segToggle = (which, current) =>
+      '<div class="seg-toggle">' +
+        '<button type="button" class="' + (current === "left" ? "on" : "") + '" onclick="setCatImgSource(' + jq(c) + ',' + jq(which) + ',' + jq("left") + ')">Left</button>' +
+        '<button type="button" class="' + (current === "right" ? "on" : "") + '" onclick="setCatImgSource(' + jq(c) + ',' + jq(which) + ',' + jq("right") + ')">Right</button>' +
+      '</div>';
+
+    const selectors = hasBoth
+      ? '<div class="cat-img-selectors">' +
+          '<div class="cat-img-select-row"><span class="cat-img-select-label">Mobile header shows</span>' + segToggle("mobile", mobileSrc) + '</div>' +
+          '<div class="cat-img-select-row"><span class="cat-img-select-label">Homepage tile shows</span>' + segToggle("tile", tileSrc) + '</div>' +
+        '</div>'
+      : '<p class="muted" style="font-size:11px;margin-top:6px">Add a Right photo to unlock the desktop split banner, and to choose which one shows on mobile/the homepage tile.</p>';
+
     return '<div class="cat-img-item">' +
-      '<div class="cat-img-thumb">' +
-        (img ? '<img src="' + esc(img) + '" alt="' + esc(c) + '">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)">No image</div>') +
-      '</div>' +
-      '<div style="flex:1"><strong style="font-size:13px">' + esc(c) + '</strong>' +
-        (img ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">Image set</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:2px">No image set</div>') +
-      '</div>' +
-      '<div style="display:flex;gap:6px;align-items:center">' +
-        '<label class="btn sm ghost" style="cursor:pointer;margin:0">Upload<input type="file" accept="image/*" style="display:none;width:0" onchange="uploadCatImg(' + jq(c) + ',this)"></label>' +
-        (img ? '<button class="btn danger sm" onclick="deleteCatImg(' + jq(c) + ')">Remove</button>' : '') +
-      '</div>' +
+      '<div class="cat-img-item-head"><strong style="font-size:13.5px">' + esc(c) + '</strong></div>' +
+      '<div class="cat-img-slots">' + slot("left", left) + slot("right", right) + '</div>' +
+      selectors +
     '</div>';
   }).join('');
 }
 
-async function uploadCatImg(category, input) {
+async function uploadCatImg(category, side, input) {
   if (!input.files.length) return;
   const file = input.files[0];
   input.value = "";
-  openCropper(file, { ratio: 4 / 3, title: "Crop category image", ratioLabel: "Category photo — used 3 ways. Each coloured box below shows exactly what that version will display; keep the main subject inside all of them.", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category", deviceCrops: [{ name: "Home tile (3:4)", ratio: 3 / 4 }, { name: "Banner desktop (16:3)", ratio: 16 / 3 }, { name: "Banner mobile (3:2)", ratio: 3 / 2 }] },
-    async (cropped) => {
-      toast("Uploading…");
-      const fd = new FormData(); fd.append("file", cropped); fd.append("category", category);
-      const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
-      if (!res.ok) return toast("Upload failed");
-      const data = await res.json();
-      CAT_IMAGES[category] = data.image_url;
-      toast("Image saved");
-      renderCatImgList();
-    });
+  openCropper(file, {
+    ratio: 4 / 5, title: "Crop category photo (" + (side === "right" ? "Right" : "Left") + ")",
+    ratioLabel: "This photo is shown at a few sizes — each coloured box below shows exactly what that version will display; keep the main subject inside all of them.",
+    maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category-" + side,
+    deviceCrops: [{ name: "Desktop header (2:1)", ratio: 2 / 1 }, { name: "Mobile header (3:2)", ratio: 3 / 2 }, { name: "Homepage tile (3:4)", ratio: 3 / 4 }],
+  }, async (cropped) => {
+    toast("Uploading…");
+    const fd = new FormData(); fd.append("file", cropped); fd.append("category", category); fd.append("side", side);
+    const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
+    if (!res.ok) return toast("Upload failed");
+    const data = await res.json();
+    if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category, mobile_source: "left", tile_source: "left" };
+    CAT_IMAGES[category][side + "_image_url"] = data.image_url;
+    toast("Photo saved");
+    renderCatImgList();
+  });
 }
 
-async function deleteCatImg(category) {
-  if (!confirm('Remove the image for "' + category + '"?')) return;
-  const { ok } = await api("/api/admin/category-images?category=" + encodeURIComponent(category), { method: "DELETE" });
-  if (ok) { delete CAT_IMAGES[category]; toast("Removed"); renderCatImgList(); }
+async function deleteCatImg(category, side) {
+  if (!confirm("Remove the " + side + " photo for \"" + category + "\"?")) return;
+  const { ok } = await api("/api/admin/category-images?category=" + encodeURIComponent(category) + "&side=" + encodeURIComponent(side), { method: "DELETE" });
+  if (ok) {
+    if (CAT_IMAGES[category]) CAT_IMAGES[category][side + "_image_url"] = "";
+    toast("Removed");
+    renderCatImgList();
+  } else toast("Failed");
+}
+
+// which: "mobile" | "tile" — side: "left" | "right"
+async function setCatImgSource(category, which, side) {
+  const body = { category }; body[which + "_source"] = side;
+  const { ok } = await api("/api/admin/category-images", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!ok) return toast("Failed");
+  if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category };
+  CAT_IMAGES[category][which + "_source"] = side;
+  renderCatImgList();
 }
 
 // ---- categories ----

@@ -198,7 +198,19 @@ The 20s timeout in `api()` covers the worst-case cold start.
   - Migration for existing DBs: `ALTER TABLE orders ADD COLUMN customer_phone TEXT;`
 `banners(id, url, link, sort_order, created_at)`
 `categories(id, name, created_at)`
-`category_images(id, category, image_url, updated_at)`
+`category_images(category PK, image_key, image_url [legacy, unused], left_image_key, left_image_url,
+  right_image_key, right_image_url, mobile_source, tile_source)`
+  - Two photos per category (Left/Right, ~4:5). Desktop category page shows both side by side with the
+    category name in the gap (`.cat-hero-split`); mobile shows one photo only — `mobile_source`
+    ('left'/'right') picks which — with a small label over a light bottom gradient (`.cat-hero-mobile`).
+    The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
+    uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
+    Admin UI: Banners tab → Category Images, two upload slots per category (`renderCatImgList` in
+    admin.js), each opening the crop tool with `deviceCrops` guides for Mobile (3:2) and Tile (3:4).
+  - Migration note: the original `image_key`/`image_url` columns had `NOT NULL` — SQLite can't drop
+    that via `ALTER TABLE`, so if this table is ever migrated again, rebuild it (`CREATE TABLE ... new`
+    → `INSERT ... SELECT` → `DROP` → `RENAME`) rather than just adding columns, or `INSERT ... ON
+    CONFLICT DO UPDATE` will fail with `NOT NULL constraint failed: category_images.image_key`.
 
 ## Cloudflare environment variables (Pages → Settings → Environment Variables)
 
@@ -224,7 +236,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=36 (styles v=48)**, **product.html = v=42 (styles v=48)**, **s.html (catalogue) = v=44 (styles v=48)**
+  Current versions: **admin.html = v=40 (styles v=52)**, **product.html = v=42 (styles v=52)**, **s.html (catalogue) = v=45 (styles v=52)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

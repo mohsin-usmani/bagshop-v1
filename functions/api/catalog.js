@@ -47,8 +47,20 @@ export async function onRequestGet(context) {
   let nav_categories = navPicked.filter((c) => categories.includes(c)).slice(0, 10);
   if (!nav_categories.length) nav_categories = categories.slice(0, 10);
 
+  // Two photos per category (left/right) — the desktop header shows both side
+  // by side; the admin's mobile_source/tile_source picks which single one
+  // feeds the mobile header and the homepage tile respectively.
   const category_images = {};
-  for (const r of catImgRows) category_images[r.category] = r.image_url;
+  for (const r of catImgRows) {
+    const left = r.left_image_url || r.image_url || "";
+    const right = r.right_image_url || "";
+    category_images[r.category] = {
+      left_url: left,
+      right_url: right,
+      mobile_url: (r.mobile_source === "right" ? right : left) || right,
+      tile_url: (r.tile_source === "right" ? right : left) || right,
+    };
+  }
 
   return json({
     shop: {

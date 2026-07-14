@@ -76,10 +76,22 @@ CREATE TABLE IF NOT EXISTS banners (
   is_active  INTEGER NOT NULL DEFAULT 1
 );
 
+-- Two photos per category (left/right) so the desktop category header can show
+-- them side-by-side with the category name in the gap, Lenskart-style. The
+-- mobile header and the homepage tile each show just one of the two — which
+-- one is the admin's choice, stored in mobile_source/tile_source ('left'/'right').
+-- Legacy image_key/image_url are kept (unused) rather than dropped — SQLite
+-- can't cheaply drop columns, and older rows may still have data there.
 CREATE TABLE IF NOT EXISTS category_images (
-  category  TEXT PRIMARY KEY,
-  image_key TEXT NOT NULL,
-  image_url TEXT NOT NULL
+  category        TEXT PRIMARY KEY,
+  image_key       TEXT,
+  image_url       TEXT,
+  left_image_key  TEXT,
+  left_image_url  TEXT,
+  right_image_key TEXT,
+  right_image_url TEXT,
+  mobile_source   TEXT NOT NULL DEFAULT 'left',
+  tile_source     TEXT NOT NULL DEFAULT 'left'
 );
 
 -- ---------- default settings (edit later in the Admin > Settings tab) ----------
@@ -113,8 +125,9 @@ INSERT OR IGNORE INTO banners (id, image_key, image_url, link_url, sort_order, i
    'https://www.samsonite.in/on/demandware.static/-/Library-Sites-SamsoniteSharedLibrary/default/dw1184dace/images/category/banner/plp-banner-backpack.jpg',
    'Luggage', 1, 1);
 
--- ── Category hero images ──────────────────────────────────────────────
-INSERT OR IGNORE INTO category_images (category, image_key, image_url) VALUES
+-- ── Category hero images (left photo only by default — admin can add a
+--    right photo later for the desktop split-banner look) ─────────────
+INSERT OR IGNORE INTO category_images (category, left_image_key, left_image_url) VALUES
   ('Backpacks', 'cat-backpacks',
    'https://www.samsonite.in/dw/image/v2/AAWQ_PRD/on/demandware.static/-/Sites-Samsonite/default/dw7659c983/images/evosight-backpack-14/hi-res/153521_1041_hi-res_FRONT34_1.jpg?sw=600&sh=900'),
   ('Luggage', 'cat-luggage',

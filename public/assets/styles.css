@@ -616,13 +616,29 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .bp-mobile{width:66px;aspect-ratio:4/3}
 .banner-info{flex:1;min-width:0}
 .banner-link-input{font-size:13px;padding:6px 8px;border:1.5px solid var(--line);width:100%;font-family:inherit}
-.cat-img-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
-.cat-img-thumb{width:48px;height:48px;overflow:hidden;background:var(--bg2);flex-shrink:0}
-.cat-img-thumb img{width:100%;height:100%;object-fit:cover}
+/* Category images admin: two photo slots (Left/Right) per category + which-
+   side-goes-where selectors, replacing the old single-thumbnail row. */
+.cat-img-item{padding:14px;margin-bottom:12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.cat-img-item-head{margin-bottom:10px}
+.cat-img-slots{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cat-img-slot{display:flex;flex-direction:column;gap:6px}
+.cat-img-thumb{width:100%;aspect-ratio:4/5;overflow:hidden;background:var(--bg2);border:1px solid var(--line);border-radius:6px}
+.cat-img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.cat-img-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.cat-img-slot-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cat-img-slot-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-right:auto}
+.cat-img-selectors{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.cat-img-select-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cat-img-select-label{font-size:12px;color:var(--text);font-weight:600}
+.seg-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg-toggle button{background:#fff;border:none;font:inherit;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;color:var(--muted)}
+.seg-toggle button+button{border-left:1px solid var(--line)}
+.seg-toggle button.on{background:var(--brand);color:#fff}
 
 /* image cropper (admin) */
 .crop-modal{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:14px}
-.crop-dialog{background:#fff;border-radius:6px;max-width:560px;width:100%;overflow:hidden;display:flex;flex-direction:column;max-height:94vh}
+.crop-dialog{background:#fff;border-radius:6px;max-width:560px;width:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;max-height:94vh}
+.crop-foot{flex-shrink:0}
 .crop-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
 .crop-title{font-weight:700;font-size:15px}
 .crop-x{background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);padding:0 4px}
@@ -812,6 +828,25 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .cat-hero-name{font-size:36px;font-weight:900;color:#fff;letter-spacing:4px;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.4)}
 @media(min-width:640px){.cat-hero-name{font-size:56px}}
 .cat-hero-desc{font-size:13px;color:rgba(255,255,255,.75);margin-top:10px;max-width:460px;line-height:1.6;font-weight:400}
+
+/* Two-photo split hero (admin has uploaded both Left & Right for this
+   category) — desktop shows both photos with the name in the gap between
+   them; mobile shows only the admin's chosen single photo with a small label
+   over a light gradient, not the old giant centred overlay text. */
+.cat-hero-split{background:var(--bg2)}
+.cat-hero-split-desktop{display:none}
+@media(min-width:640px){
+  .cat-hero-split-desktop{display:flex;align-items:stretch;aspect-ratio:16/3}
+  .cat-hero-mobile{display:none}
+  .cat-hero-split-photo{flex:1;min-width:0;overflow:hidden}
+  .cat-hero-split-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .cat-hero-split-mid{flex:0 0 auto;min-width:180px;display:flex;align-items:center;justify-content:center;padding:0 28px;background:var(--bg2)}
+  .cat-hero-split-mid .cat-hero-name{color:var(--text);text-shadow:none;font-size:26px;letter-spacing:2.5px}
+}
+.cat-hero-mobile{position:relative}
+.cat-hero-mobile-img{width:100%;display:block;object-fit:cover;aspect-ratio:3/2}
+.cat-hero-mobile-overlay{position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(to top,rgba(0,0,0,.32),transparent);pointer-events:none}
+.cat-hero-mobile-label{position:absolute;left:14px;bottom:11px;color:#fff;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-shadow:0 1px 5px rgba(0,0,0,.4)}
 
 /* ── PRODUCT DETAIL PAGE (product.html) ── */
 .pdp-page{max-width:1200px;margin:0 auto;padding:0 16px 80px}
