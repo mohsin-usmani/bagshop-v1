@@ -1592,7 +1592,7 @@ function renderCatImgList() {
 // gets relative to its height. Keep this in sync with .cat-hero-split-mid's
 // min-width in styles.css if that's ever changed again.
 const CAT_IMG_TARGETS = [
-  { key: "desktop", name: "Desktop header (16:9)", ratio: 16 / 9 },
+  { key: "desktop", name: "Desktop header (2:1)", ratio: 2 / 1 },
   { key: "mobile", name: "Mobile header (3:2)", ratio: 3 / 2 },
   { key: "tile", name: "Homepage tile (3:4)", ratio: 3 / 4 },
 ];
