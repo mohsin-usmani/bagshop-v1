@@ -265,9 +265,13 @@ function openCropper(file, opts, onDone, onCancel) {
           const st = states[dc.key];
           return exportRegion(-st.ox / st.scale, -st.oy / st.scale, st.fw / st.scale, st.fh / st.scale, dc.key);
         });
+        // Also keep the unmodified original so "Adjust" can reopen the cropper
+        // later without asking the admin to pick the file again.
+        entries.push(exportRegion(0, 0, natW, natH, "original"));
         Promise.all(entries).then((files) => {
           const out = {};
           opts.deviceCrops.forEach((dc, i) => { out[dc.key] = files[i]; });
+          out.original = files[files.length - 1];
           cleanup(); onDone(out);
         });
       };
@@ -1535,6 +1539,7 @@ function renderCatImgList() {
         '</div>' +
         '<div class="cat-img-slot-foot">' +
           '<span class="cat-img-slot-label">' + (side === "left" ? "Left" : "Right") + '</span>' +
+          (url ? '<button class="btn sm ghost" onclick="adjustCatImg(' + jq(c) + ',' + jq(side) + ')">Adjust</button>' : '') +
           '<label class="btn sm ghost" style="cursor:pointer;margin:0">' + (url ? "Replace" : "Upload") +
             '<input type="file" accept="image/*" style="display:none;width:0" onchange="uploadCatImg(' + jq(c) + ',' + jq(side) + ',this)"></label>' +
           (url ? '<button class="btn danger sm" onclick="deleteCatImg(' + jq(c) + ',' + jq(side) + ')">✕</button>' : '') +
@@ -1572,10 +1577,7 @@ const CAT_IMG_TARGETS = [
   { key: "tile", name: "Homepage tile (3:4)", ratio: 3 / 4 },
 ];
 
-async function uploadCatImg(category, side, input) {
-  if (!input.files.length) return;
-  const file = input.files[0];
-  input.value = "";
+function openCatImgCropper(category, side, file) {
   openCropper(file, {
     perTargetAdjust: true,
     title: "Crop category photo (" + (side === "right" ? "Right" : "Left") + ")",
@@ -1586,19 +1588,44 @@ async function uploadCatImg(category, side, input) {
     toast("Uploading…");
     if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category, mobile_source: "left", tile_source: "left" };
     let lastUrl = "";
-    for (const dc of CAT_IMG_TARGETS) {
+    for (const dc of CAT_IMG_TARGETS.concat([{ key: "original" }])) {
       const fd = new FormData();
       fd.append("file", files[dc.key]); fd.append("category", category); fd.append("side", side); fd.append("target", dc.key);
       const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
       if (!res.ok) { toast("Upload failed"); renderCatImgList(); return; }
       const data = await res.json();
-      lastUrl = data.image_url;
+      if (dc.key !== "original") lastUrl = data.image_url;
     }
     // Keep a plain fallback url too (used for admin thumbnails / older code paths).
     CAT_IMAGES[category][side + "_image_url"] = lastUrl;
     toast("Photo saved");
     renderCatImgList();
   });
+}
+
+async function uploadCatImg(category, side, input) {
+  if (!input.files.length) return;
+  const file = input.files[0];
+  input.value = "";
+  openCatImgCropper(category, side, file);
+}
+
+// Re-open the cropper on the photo already uploaded for this side, without
+// making the admin pick the file again — reframes from the saved unmodified
+// original when available, or the best existing crop for older photos that
+// predate the "original" being kept.
+async function adjustCatImg(category, side) {
+  const row = CAT_IMAGES[category] || {};
+  let variants = {};
+  try { variants = JSON.parse(row[side + "_variants_json"] || "{}") || {}; } catch (e) {}
+  const src = (variants.original && variants.original.url) || catImgThumb(row, side);
+  if (!src) return toast("No photo to adjust");
+  toast("Loading photo…");
+  const res = await fetch(src);
+  if (!res.ok) return toast("Could not load photo");
+  const blob = await res.blob();
+  const file = new File([blob], "category-" + side + ".jpg", { type: blob.type || "image/jpeg" });
+  openCatImgCropper(category, side, file);
 }
 
 async function deleteCatImg(category, side) {

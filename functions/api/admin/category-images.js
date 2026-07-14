@@ -15,6 +15,8 @@ function parseVariants(json_str) {
 // side: "left" | "right" — which of the two category photos this upload fills.
 // target: "tile" | "mobile" | "desktop" — which placement's independent crop
 // this is (each placement can be framed differently from the same photo).
+// "original" is the unmodified upload, kept so the admin can re-open the
+// cropper later ("Adjust") without having to pick the file again.
 // Omitting target keeps the old single-shared-crop behaviour for compatibility.
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -23,7 +25,7 @@ export async function onRequestPost(context) {
   const file = fd.get("file");
   const category = fd.get("category");
   const side = fd.get("side") === "right" ? "right" : "left";
-  const target = ["tile", "mobile", "desktop"].includes(fd.get("target")) ? fd.get("target") : null;
+  const target = ["tile", "mobile", "desktop", "original"].includes(fd.get("target")) ? fd.get("target") : null;
   if (!file || !category) return json({ error: "missing file or category" }, 400);
   const safeCat = category.replace(/[^a-zA-Z0-9-]/g, "_");
   const arr = await file.arrayBuffer();
