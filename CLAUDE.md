@@ -206,8 +206,9 @@ The 20s timeout in `api()` covers the worst-case cold start.
     The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
   - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style, but narrower than theirs — `min-width`
-    210px vs their much wider band) shows the shop's uploaded logo (`shop.logo_url`, small, ~26px tall)
-    stacked above the black/dark category name, on the same light `--bg2` background as before.
+    260px vs their much wider band) is a plain white card showing the shop's uploaded logo
+    (`shop.logo_url`, ~28px tall) to the left of the bold condensed category name ('Arial Black',
+    weight 900) — logo and name sit side by side (`flex-direction:row`), not stacked.
   - **Mobile loops both photos** (`.cat-hero-mob-track` / `.cat-hero-mob-slide` / `.cat-hero-mob-dots`)
     instead of a single static side — same fade-crossfade + swipe + dot mechanics as the homepage
     banner (`startCatHeroLoop`/`stopCatHeroLoop`/`initCatHeroSwipe`/`setCatHeroSlide` in catalog.js),
@@ -264,7 +265,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=45 (styles v=55)**, **product.html = v=42 (styles v=55)**, **s.html (catalogue) = v=47 (styles v=55)**
+  Current versions: **admin.html = v=45 (styles v=56)**, **product.html = v=42 (styles v=56)**, **s.html (catalogue) = v=47 (styles v=56)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
