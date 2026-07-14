@@ -207,8 +207,11 @@ The 20s timeout in `api()` covers the worst-case cold start.
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
   - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style, but narrower than theirs — `min-width`
     260px vs their much wider band) is a plain white card showing the shop's uploaded logo
-    (`shop.logo_url`, ~28px tall) to the left of the bold condensed category name ('Arial Black',
-    weight 900) — logo and name sit side by side (`flex-direction:row`), not stacked.
+    (`shop.logo_url`, ~28px tall) to the left of the category name — side by side (`flex-direction:row`),
+    not stacked. The name uses the self-hosted **Anton** display font (`/assets/fonts/Anton-Regular.woff2`,
+    `@font-face` in styles.css) to match a bold block-letter logotype look (e.g. Lenskart's "POP MART"
+    banner) — matches the project's existing pattern of self-hosting fonts (GT-America, Gotham) rather
+    than pulling from Google Fonts CDN.
   - **Mobile loops both photos** (`.cat-hero-mob-track` / `.cat-hero-mob-slide` / `.cat-hero-mob-dots`)
     instead of a single static side — same fade-crossfade + swipe + dot mechanics as the homepage
     banner (`startCatHeroLoop`/`stopCatHeroLoop`/`initCatHeroSwipe`/`setCatHeroSlide` in catalog.js),
@@ -265,7 +268,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=45 (styles v=56)**, **product.html = v=42 (styles v=56)**, **s.html (catalogue) = v=47 (styles v=56)**
+  Current versions: **admin.html = v=45 (styles v=57)**, **product.html = v=42 (styles v=57)**, **s.html (catalogue) = v=47 (styles v=57)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
