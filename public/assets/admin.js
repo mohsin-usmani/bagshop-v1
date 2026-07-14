@@ -1610,6 +1610,10 @@ function openCatImgCropper(category, side, file, initialRects) {
     toast("Uploading…");
     if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category, mobile_source: "left", tile_source: "left" };
     let lastUrl = "";
+    // Rebuild the side's variants locally from what we just saved, so an
+    // immediate "Adjust" (no page reload in between) sees the fresh rects —
+    // relying on the next GET would show stale/absent data until reload.
+    const variants = {};
     for (const dc of CAT_IMG_TARGETS.concat([{ key: "original" }])) {
       const fd = new FormData();
       fd.append("file", out[dc.key].file); fd.append("category", category); fd.append("side", side); fd.append("target", dc.key);
@@ -1617,8 +1621,10 @@ function openCatImgCropper(category, side, file, initialRects) {
       const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
       if (!res.ok) { toast("Upload failed"); renderCatImgList(); return; }
       const data = await res.json();
+      variants[dc.key] = out[dc.key].rect ? { url: data.image_url, rect: out[dc.key].rect } : { url: data.image_url };
       if (dc.key !== "original") lastUrl = data.image_url;
     }
+    CAT_IMAGES[category][side + "_variants_json"] = JSON.stringify(variants);
     // Keep a plain fallback url too (used for admin thumbnails / older code paths).
     CAT_IMAGES[category][side + "_image_url"] = lastUrl;
     toast("Photo saved");

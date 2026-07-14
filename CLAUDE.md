@@ -253,7 +253,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=43 (styles v=54)**, **product.html = v=42 (styles v=54)**, **s.html (catalogue) = v=46 (styles v=54)**
+  Current versions: **admin.html = v=44 (styles v=54)**, **product.html = v=42 (styles v=54)**, **s.html (catalogue) = v=46 (styles v=54)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
