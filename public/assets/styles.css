@@ -839,11 +839,12 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .cat-hero-desc{font-size:13px;color:rgba(255,255,255,.75);margin-top:10px;max-width:460px;line-height:1.6;font-weight:400}
 
 /* Two-photo split hero (admin has uploaded both Left & Right for this
-   category) — desktop shows both photos with the shop logo (left) + a bold
-   condensed category name (right) side by side on a plain white card in the
-   gap between them; mobile loops both photos one at a time (like the
-   homepage banner) instead of picking a single static side, with a small
-   label over a light gradient. */
+   category) — desktop shows both photos (equal width via flex:1 on both,
+   so the layout stays symmetric/centred at any viewport width) with the
+   shop logo (left) + bold category name (right) side by side on a wide
+   plain white card in the gap between them; mobile loops both photos one
+   at a time (like the homepage banner) instead of picking a single static
+   side, with a small label over a light gradient. */
 .cat-hero-split{background:var(--bg2)}
 .cat-hero-split-desktop{display:none}
 @media(min-width:640px){
@@ -851,9 +852,9 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
   .cat-hero-mobile{display:none}
   .cat-hero-split-photo{flex:1;min-width:0;overflow:hidden}
   .cat-hero-split-photo img{width:100%;height:100%;object-fit:cover;display:block}
-  .cat-hero-split-mid{flex:0 0 auto;min-width:260px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:14px;padding:0 24px;background:#fff}
-  .cat-hero-split-logo{height:28px;width:auto;object-fit:contain;flex-shrink:0}
-  .cat-hero-split-mid .cat-hero-name{color:var(--text);text-shadow:none;font-size:26px;letter-spacing:1px;font-family:'Anton','Arial Narrow Bold',sans-serif;font-weight:400;white-space:nowrap}
+  .cat-hero-split-mid{flex:0 0 auto;min-width:520px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:22px;padding:0 32px;background:#fff}
+  .cat-hero-split-logo{height:20px;width:auto;object-fit:contain;flex-shrink:0}
+  .cat-hero-split-mid .cat-hero-name{color:var(--text);text-shadow:none;font-size:32px;letter-spacing:3px;font-family:'Anton','Arial Narrow Bold',sans-serif;font-weight:400;white-space:nowrap}
 }
 .cat-hero-mobile{position:relative}
 .cat-hero-mob-track{position:relative;width:100%;aspect-ratio:3/2}

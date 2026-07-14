@@ -205,13 +205,18 @@ The 20s timeout in `api()` covers the worst-case cold start.
     ('left'/'right') picks which — with a small label over a light bottom gradient (`.cat-hero-mobile`).
     The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
-  - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style, but narrower than theirs — `min-width`
-    260px vs their much wider band) is a plain white card showing the shop's uploaded logo
-    (`shop.logo_url`, ~28px tall) to the left of the category name — side by side (`flex-direction:row`),
-    not stacked. The name uses the self-hosted **Anton** display font (`/assets/fonts/Anton-Regular.woff2`,
-    `@font-face` in styles.css) to match a bold block-letter logotype look (e.g. Lenskart's "POP MART"
-    banner) — matches the project's existing pattern of self-hosting fonts (GT-America, Gotham) rather
-    than pulling from Google Fonts CDN.
+  - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style — `min-width` 520px) is a plain white
+    card showing the shop's uploaded logo (`shop.logo_url`, ~20px tall) to the left of the category
+    name — side by side (`flex-direction:row`), not stacked. The name uses the self-hosted **Anton**
+    display font (`/assets/fonts/Anton-Regular.woff2`, `@font-face` in styles.css, 32px, letter-spacing
+    3px) to match a bold block-letter logotype look (e.g. Lenskart's "POP MART" banner) — matches the
+    project's existing pattern of self-hosting fonts (GT-America, Gotham) rather than pulling from
+    Google Fonts CDN. The two side photos are always equal width (`flex:1` on both `.cat-hero-split-photo`)
+    so the layout stays symmetric/centred at any viewport width — widening the mid card never unbalances
+    it, just shrinks both photos equally. **If the mid card's `min-width` changes again, also update
+    the "desktop" ratio in `CAT_IMG_TARGETS` (admin.js)** — it's a guide for the crop tool showing the
+    actual on-page shape of each side photo, computed from the mid width vs. a representative desktop
+    viewport; currently 16:9 for the 520px mid width (was 2:1 at 260px, was ~2.2:1 at 210px).
   - **Mobile loops both photos** (`.cat-hero-mob-track` / `.cat-hero-mob-slide` / `.cat-hero-mob-dots`)
     instead of a single static side — same fade-crossfade + swipe + dot mechanics as the homepage
     banner (`startCatHeroLoop`/`stopCatHeroLoop`/`initCatHeroSwipe`/`setCatHeroSlide` in catalog.js),
@@ -268,7 +273,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=45 (styles v=57)**, **product.html = v=42 (styles v=57)**, **s.html (catalogue) = v=47 (styles v=57)**
+  Current versions: **admin.html = v=46 (styles v=58)**, **product.html = v=42 (styles v=58)**, **s.html (catalogue) = v=47 (styles v=58)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
