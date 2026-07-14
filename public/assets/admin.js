@@ -177,6 +177,16 @@ function openCropper(file, opts, onDone, onCancel) {
       const baseScale = Math.max(fw / natW, fh / natH);
       return { fw, fh, baseScale, scale: baseScale, ox: (fw - natW * baseScale) / 2, oy: (fh - natH * baseScale) / 2 };
     }
+    // Rebuilds the exact pan/zoom that produced a previously-saved crop, from
+    // its stored source rectangle (fractions of the original image) — used so
+    // "Adjust" reopens showing what was actually chosen last time, not a
+    // freshly re-centred crop that looks like nothing was framed yet.
+    function stateFromRect(rect, r) {
+      const { fw, fh } = fitFrame(r);
+      const sx = rect.x * natW, sy = rect.y * natH, sw = rect.w * natW, sh = rect.h * natH;
+      const scale = sw > 0 ? fw / sw : Math.max(fw / natW, fh / natH);
+      return { fw, fh, baseScale: Math.max(fw / natW, fh / natH), scale, ox: -sx * scale, oy: -sy * scale };
+    }
 
     const { fw, fh } = fitFrame(ratio);
 
@@ -246,10 +256,14 @@ function openCropper(file, opts, onDone, onCancel) {
         tabsEl.appendChild(btn);
         tabBtns[dc.key] = btn;
       });
+      function initialStateFor(dc) {
+        const savedRect = opts.initialRects && opts.initialRects[dc.key];
+        return savedRect ? stateFromRect(savedRect, dc.ratio) : centeredState(dc.ratio);
+      }
       function selectTab(key) {
         activeKey = key;
         const dc = opts.deviceCrops.find((d) => d.key === key);
-        if (!states[key]) states[key] = centeredState(dc.ratio);
+        if (!states[key]) states[key] = initialStateFor(dc);
         active = states[key];
         Object.keys(tabBtns).forEach((k) => tabBtns[k].classList.toggle("on", k === key));
         stage.style.width = active.fw + "px"; stage.style.height = active.fh + "px";
@@ -259,8 +273,8 @@ function openCropper(file, opts, onDone, onCancel) {
       selectTab(activeKey);
 
       modal.querySelector(".crop-apply").onclick = () => {
-        // Make sure every target has a state (tabs never opened default to centred).
-        opts.deviceCrops.forEach((dc) => { if (!states[dc.key]) states[dc.key] = centeredState(dc.ratio); });
+        // Make sure every target has a state (tabs never opened default to centred/saved-rect).
+        opts.deviceCrops.forEach((dc) => { if (!states[dc.key]) states[dc.key] = initialStateFor(dc); });
         const entries = opts.deviceCrops.map((dc) => {
           const st = states[dc.key];
           return exportRegion(-st.ox / st.scale, -st.oy / st.scale, st.fw / st.scale, st.fh / st.scale, dc.key);
@@ -270,8 +284,12 @@ function openCropper(file, opts, onDone, onCancel) {
         entries.push(exportRegion(0, 0, natW, natH, "original"));
         Promise.all(entries).then((files) => {
           const out = {};
-          opts.deviceCrops.forEach((dc, i) => { out[dc.key] = files[i]; });
-          out.original = files[files.length - 1];
+          opts.deviceCrops.forEach((dc, i) => {
+            const st = states[dc.key];
+            const rect = { x: (-st.ox / st.scale) / natW, y: (-st.oy / st.scale) / natH, w: (st.fw / st.scale) / natW, h: (st.fh / st.scale) / natH };
+            out[dc.key] = { file: files[i], rect };
+          });
+          out.original = { file: files[files.length - 1] };
           cleanup(); onDone(out);
         });
       };
@@ -1577,20 +1595,25 @@ const CAT_IMG_TARGETS = [
   { key: "tile", name: "Homepage tile (3:4)", ratio: 3 / 4 },
 ];
 
-function openCatImgCropper(category, side, file) {
+// initialRects (optional): { [targetKey]: {x,y,w,h} } — previously-saved crop
+// rectangles (fractions of the source image) to reopen each tab showing what
+// was actually framed last time, instead of resetting to a centred default.
+function openCatImgCropper(category, side, file, initialRects) {
   openCropper(file, {
     perTargetAdjust: true,
     title: "Crop category photo (" + (side === "right" ? "Right" : "Left") + ")",
     ratioLabel: "This photo is shown at a few sizes — frame each one separately so the subject looks right everywhere.",
     maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "category-" + side,
     deviceCrops: CAT_IMG_TARGETS,
-  }, async (files) => {
+    initialRects,
+  }, async (out) => {
     toast("Uploading…");
     if (!CAT_IMAGES[category]) CAT_IMAGES[category] = { category, mobile_source: "left", tile_source: "left" };
     let lastUrl = "";
     for (const dc of CAT_IMG_TARGETS.concat([{ key: "original" }])) {
       const fd = new FormData();
-      fd.append("file", files[dc.key]); fd.append("category", category); fd.append("side", side); fd.append("target", dc.key);
+      fd.append("file", out[dc.key].file); fd.append("category", category); fd.append("side", side); fd.append("target", dc.key);
+      if (out[dc.key].rect) fd.append("rect", JSON.stringify(out[dc.key].rect));
       const res = await fetch("/api/admin/category-images", { method: "POST", body: fd });
       if (!res.ok) { toast("Upload failed"); renderCatImgList(); return; }
       const data = await res.json();
@@ -1613,7 +1636,8 @@ async function uploadCatImg(category, side, input) {
 // Re-open the cropper on the photo already uploaded for this side, without
 // making the admin pick the file again — reframes from the saved unmodified
 // original when available, or the best existing crop for older photos that
-// predate the "original" being kept.
+// predate the "original" being kept. Each tab is seeded with its previously
+// saved crop rectangle so it shows the actual framing chosen last time.
 async function adjustCatImg(category, side) {
   const row = CAT_IMAGES[category] || {};
   let variants = {};
@@ -1625,7 +1649,13 @@ async function adjustCatImg(category, side) {
   if (!res.ok) return toast("Could not load photo");
   const blob = await res.blob();
   const file = new File([blob], "category-" + side + ".jpg", { type: blob.type || "image/jpeg" });
-  openCatImgCropper(category, side, file);
+  // Rects were saved relative to the true original — only trustworthy to
+  // reuse when we actually loaded the original just now (not a fallback crop).
+  const initialRects = variants.original ? {} : undefined;
+  if (initialRects) {
+    CAT_IMG_TARGETS.forEach((dc) => { if (variants[dc.key] && variants[dc.key].rect) initialRects[dc.key] = variants[dc.key].rect; });
+  }
+  openCatImgCropper(category, side, file, initialRects);
 }
 
 async function deleteCatImg(category, side) {

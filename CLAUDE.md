@@ -212,12 +212,16 @@ The 20s timeout in `api()` covers the worst-case cold start.
     `perTargetAdjust` mode (`openCropper` in admin.js) — tabs (`CAT_IMG_TARGETS`) switch which
     placement's own drag/zoom state is being edited; "Save all" generates and uploads all 3 crops
     plus the unmodified `original` in one go (`openCatImgCropper`, one POST per target with a
-    `target` field). Thumbnails in the admin list are small (120px) — click **Adjust** on an existing
-    photo to reopen the cropper without re-picking the file (`adjustCatImg` fetches the saved
-    `original` variant, or falls back to the best existing crop for photos uploaded before `original`
-    was kept). `{side}_image_url/key` (legacy) is kept as a fallback only — new uploads write solely
-    into `{side}_variants_json`. Frontend (`functions/api/catalog.js`) resolves each placement from
-    variants first, legacy url second.
+    `target` field). Each variant also stores `rect` (the source region as fractions of the original,
+    computed from the pan/zoom used) so **Adjust** on an existing photo reopens each tab showing the
+    exact framing chosen last time (`stateFromRect` in `openCropper`) instead of resetting to a
+    centred default — without `rect` the reopened cropper looked like the photo had never been
+    cropped. Thumbnails in the admin list are small (120px). `adjustCatImg` fetches the saved
+    `original` variant, or falls back to the best existing crop (with no `rect` restore, since a
+    fallback crop's coordinates don't map back to the true original) for photos uploaded before
+    `original` was kept. `{side}_image_url/key` (legacy) is kept as a fallback only — new uploads
+    write solely into `{side}_variants_json`. Frontend (`functions/api/catalog.js`) resolves each
+    placement from variants first, legacy url second.
   - Migration note: the original `image_key`/`image_url` columns had `NOT NULL` — SQLite can't drop
     that via `ALTER TABLE`, so if this table is ever migrated again, rebuild it (`CREATE TABLE ... new`
     → `INSERT ... SELECT` → `DROP` → `RENAME`) rather than just adding columns, or `INSERT ... ON
@@ -249,7 +253,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=42 (styles v=54)**, **product.html = v=42 (styles v=54)**, **s.html (catalogue) = v=46 (styles v=54)**
+  Current versions: **admin.html = v=43 (styles v=54)**, **product.html = v=42 (styles v=54)**, **s.html (catalogue) = v=46 (styles v=54)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

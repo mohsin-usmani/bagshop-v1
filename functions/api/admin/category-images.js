@@ -26,6 +26,11 @@ export async function onRequestPost(context) {
   const category = fd.get("category");
   const side = fd.get("side") === "right" ? "right" : "left";
   const target = ["tile", "mobile", "desktop", "original"].includes(fd.get("target")) ? fd.get("target") : null;
+  // rect: {x,y,w,h} fractions of the source image this crop was taken from —
+  // lets "Adjust" reopen the cropper showing the exact framing chosen last
+  // time instead of resetting to a centred default.
+  let rect = null;
+  try { rect = JSON.parse(fd.get("rect") || "null"); } catch (e) {}
   if (!file || !category) return json({ error: "missing file or category" }, 400);
   const safeCat = category.replace(/[^a-zA-Z0-9-]/g, "_");
   const arr = await file.arrayBuffer();
@@ -38,7 +43,7 @@ export async function onRequestPost(context) {
     const key = "catimg/" + safeCat + "-" + side + "-" + target + "-" + Date.now();
     await env.BUCKET.put(key, arr, { httpMetadata: { contentType: file.type || "image/jpeg" } });
     const image_url = "/api/img/" + key;
-    variants[target] = { key, url: image_url };
+    variants[target] = rect ? { key, url: image_url, rect } : { key, url: image_url };
     await env.DB.prepare(
       "INSERT INTO category_images (category, " + varCol + ") VALUES (?,?) " +
       "ON CONFLICT(category) DO UPDATE SET " + varCol + "=excluded." + varCol
