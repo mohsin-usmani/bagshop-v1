@@ -205,6 +205,17 @@ The 20s timeout in `api()` covers the worst-case cold start.
     ('left'/'right') picks which — with a small label over a light bottom gradient (`.cat-hero-mobile`).
     The homepage tile similarly uses whichever side `tile_source` points to. If only one side is
     uploaded, falls back to the pre-existing single-photo `.cat-hero` look (image + big centred text).
+  - **Desktop mid gap:** `.cat-hero-split-mid` (Lenskart-style, but narrower than theirs — `min-width`
+    210px vs their much wider band) shows the shop's uploaded logo (`shop.logo_url`, small, ~26px tall)
+    stacked above the black/dark category name, on the same light `--bg2` background as before.
+  - **Mobile loops both photos** (`.cat-hero-mob-track` / `.cat-hero-mob-slide` / `.cat-hero-mob-dots`)
+    instead of a single static side — same fade-crossfade + swipe + dot mechanics as the homepage
+    banner (`startCatHeroLoop`/`stopCatHeroLoop`/`initCatHeroSwipe`/`setCatHeroSlide` in catalog.js),
+    each photo using its own `mobile` crop (`left_mobile_url`/`right_mobile_url` from catalog.js).
+    Because of this, `mobile_source` is no longer read when building the customer catalogue response
+    (still writable via the category-images PATCH endpoint, and the DB column is kept, but nothing
+    reads it) — the admin's "Mobile header shows" Left/Right picker was removed since it no longer
+    does anything.
   - **Per-target independent framing:** each of the two uploaded photos can be cropped differently
     for each of its 3 placements (Desktop header 2:1, Mobile header 3:2, Homepage tile 3:4) instead of
     one shared centred crop. `{side}_variants_json` stores `{tile:{key,url}, mobile:{...}, desktop:{...},
@@ -253,7 +264,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=44 (styles v=54)**, **product.html = v=42 (styles v=54)**, **s.html (catalogue) = v=46 (styles v=54)**
+  Current versions: **admin.html = v=45 (styles v=55)**, **product.html = v=42 (styles v=55)**, **s.html (catalogue) = v=47 (styles v=55)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

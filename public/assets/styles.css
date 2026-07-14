@@ -837,9 +837,10 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .cat-hero-desc{font-size:13px;color:rgba(255,255,255,.75);margin-top:10px;max-width:460px;line-height:1.6;font-weight:400}
 
 /* Two-photo split hero (admin has uploaded both Left & Right for this
-   category) — desktop shows both photos with the name in the gap between
-   them; mobile shows only the admin's chosen single photo with a small label
-   over a light gradient, not the old giant centred overlay text. */
+   category) — desktop shows both photos with the shop logo + name in the gap
+   between them (Lenskart-style, but a little narrower than theirs); mobile
+   loops both photos one at a time (like the homepage banner) instead of
+   picking a single static side, with a small label over a light gradient. */
 .cat-hero-split{background:var(--bg2)}
 .cat-hero-split-desktop{display:none}
 @media(min-width:640px){
@@ -847,13 +848,20 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
   .cat-hero-mobile{display:none}
   .cat-hero-split-photo{flex:1;min-width:0;overflow:hidden}
   .cat-hero-split-photo img{width:100%;height:100%;object-fit:cover;display:block}
-  .cat-hero-split-mid{flex:0 0 auto;min-width:180px;display:flex;align-items:center;justify-content:center;padding:0 28px;background:var(--bg2)}
-  .cat-hero-split-mid .cat-hero-name{color:var(--text);text-shadow:none;font-size:26px;letter-spacing:2.5px}
+  .cat-hero-split-mid{flex:0 0 auto;min-width:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 32px;background:var(--bg2)}
+  .cat-hero-split-logo{height:26px;width:auto;object-fit:contain}
+  .cat-hero-split-mid .cat-hero-name{color:var(--text);text-shadow:none;font-size:24px;letter-spacing:2.5px}
 }
 .cat-hero-mobile{position:relative}
-.cat-hero-mobile-img{width:100%;display:block;object-fit:cover;aspect-ratio:3/2}
-.cat-hero-mobile-overlay{position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(to top,rgba(0,0,0,.32),transparent);pointer-events:none}
-.cat-hero-mobile-label{position:absolute;left:14px;bottom:11px;color:#fff;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-shadow:0 1px 5px rgba(0,0,0,.4)}
+.cat-hero-mob-track{position:relative;width:100%;aspect-ratio:3/2}
+.cat-hero-mob-slide{position:absolute;inset:0;opacity:0;transition:opacity .6s ease}
+.cat-hero-mob-slide.on{opacity:1;z-index:1}
+.cat-hero-mob-slide img{width:100%;height:100%;object-fit:cover;display:block}
+.cat-hero-mobile-overlay{position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(to top,rgba(0,0,0,.32),transparent);pointer-events:none;z-index:2}
+.cat-hero-mobile-label{position:absolute;left:14px;bottom:11px;color:#fff;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-shadow:0 1px 5px rgba(0,0,0,.4);z-index:2}
+.cat-hero-mob-dots{position:absolute;right:12px;bottom:14px;display:flex;gap:5px;z-index:2}
+.cat-hero-mob-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.55)}
+.cat-hero-mob-dot.on{background:#fff}
 
 /* ── PRODUCT DETAIL PAGE (product.html) ── */
 .pdp-page{max-width:1200px;margin:0 auto;padding:0 16px 80px}

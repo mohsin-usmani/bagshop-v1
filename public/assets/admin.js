@@ -1524,9 +1524,9 @@ async function deleteBanner(id) {
 
 // ---- category images ----
 // Two photos per category (Left/Right, both ~4:5). Desktop shows both
-// side-by-side with the category name in the gap; the admin picks which one
-// (Left or Right) feeds the mobile header and which one feeds the homepage
-// tile — so the same two uploads cover every placement.
+// side-by-side with the shop logo + category name in the gap; mobile loops
+// both photos one at a time; the admin picks which one (Left or Right) feeds
+// the homepage tile — so the same two uploads cover every placement.
 // Best single thumbnail for a side: prefer the independently-framed "tile"
 // crop (closest to a portrait preview), then mobile/desktop, then the legacy
 // plain upload — mirrors the fallback order the customer site uses.
@@ -1546,7 +1546,6 @@ function renderCatImgList() {
     const row = CAT_IMAGES[c] || {};
     const left = catImgThumb(row, "left");
     const right = catImgThumb(row, "right");
-    const mobileSrc = row.mobile_source === "right" ? "right" : "left";
     const tileSrc = row.tile_source === "right" ? "right" : "left";
     const hasBoth = !!(left && right);
 
@@ -1572,10 +1571,9 @@ function renderCatImgList() {
 
     const selectors = hasBoth
       ? '<div class="cat-img-selectors">' +
-          '<div class="cat-img-select-row"><span class="cat-img-select-label">Mobile header shows</span>' + segToggle("mobile", mobileSrc) + '</div>' +
           '<div class="cat-img-select-row"><span class="cat-img-select-label">Homepage tile shows</span>' + segToggle("tile", tileSrc) + '</div>' +
         '</div>'
-      : '<p class="muted" style="font-size:11px;margin-top:6px">Add a Right photo to unlock the desktop split banner, and to choose which one shows on mobile/the homepage tile.</p>';
+      : '<p class="muted" style="font-size:11px;margin-top:6px">Add a Right photo to unlock the desktop split banner (mobile then loops both), and to choose which one shows on the homepage tile.</p>';
 
     return '<div class="cat-img-item">' +
       '<div class="cat-img-item-head"><strong style="font-size:13.5px">' + esc(c) + '</strong></div>' +

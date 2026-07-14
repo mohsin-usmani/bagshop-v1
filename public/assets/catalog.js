@@ -431,6 +431,7 @@ function toggleMobSection(head) {
 
 // ── Homepage ──
 function renderHomepage() {
+  stopCatHeroLoop();
   const app = document.getElementById('app');
   app.innerHTML = heroHTML() + taglineHTML() + newArrivalsHTML() + catTilesHTML() + footerHTML();
   initBannerSwipe();
@@ -599,6 +600,36 @@ function initBannerSwipe() {
     if (Math.abs(dx) > 40) { if (dx < 0) nextBanner(); else prevBanner(); }
   }, { passive: true });
 }
+// ── Category mobile hero loop (Left/Right photos cycling, banner-style) ──
+let CAT_HERO_TIMER = null;
+function setCatHeroSlide(idx) {
+  document.querySelectorAll('#catHeroMobTrack .cat-hero-mob-slide').forEach((s, i) => s.classList.toggle('on', i === idx));
+  document.querySelectorAll('#catHeroMobDots .cat-hero-mob-dot').forEach((d, i) => d.classList.toggle('on', i === idx));
+}
+function startCatHeroLoop() {
+  stopCatHeroLoop();
+  const slides = document.querySelectorAll('#catHeroMobTrack .cat-hero-mob-slide');
+  if (slides.length < 2) return;
+  let idx = 0;
+  CAT_HERO_TIMER = setInterval(() => { idx = (idx + 1) % slides.length; setCatHeroSlide(idx); }, 3200);
+}
+function stopCatHeroLoop() { if (CAT_HERO_TIMER) { clearInterval(CAT_HERO_TIMER); CAT_HERO_TIMER = null; } }
+function initCatHeroSwipe() {
+  const el = document.getElementById('catHeroMobile');
+  if (!el) return;
+  let sx = 0;
+  el.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const slides = el.querySelectorAll('.cat-hero-mob-slide');
+    if (Math.abs(dx) <= 40 || slides.length < 2) return;
+    const cur = Array.from(slides).findIndex(s => s.classList.contains('on'));
+    const next = dx < 0 ? (cur + 1) % slides.length : (cur - 1 + slides.length) % slides.length;
+    setCatHeroSlide(next);
+    startCatHeroLoop(); // restart the timer so it doesn't immediately flip again right after a manual swipe
+  }, { passive: true });
+}
+
 function handleBannerClick(link) {
   if (!link || !DATA) return;
   // 1. match a category name
@@ -637,24 +668,31 @@ function catHeroHTML() {
   }
 
   if (left && right) {
-    // Desktop: the two photos side by side with the category name in the gap
-    // between them — each uses its own independently-framed "desktop" crop
-    // (falls back to the plain upload if that crop wasn't set). Mobile: just
-    // the admin's chosen single photo, with a small label over a light
-    // gradient (not the old giant centred text).
-    const mobileUrl = row.mobile_url || left;
+    // Desktop: the two photos side by side with the shop logo + category name
+    // in the gap between them — each uses its own independently-framed
+    // "desktop" crop (falls back to the plain upload if that crop wasn't
+    // set). Mobile: both photos loop one at a time (their own "mobile" crop),
+    // like the homepage banner, with a small label over a light gradient.
     const leftDesktop = row.left_desktop_url || left;
     const rightDesktop = row.right_desktop_url || right;
+    const leftMobile = row.left_mobile_url || left;
+    const rightMobile = row.right_mobile_url || right;
+    const shop = DATA.shop || {};
+    const logo = shop.logo_url ? '<img class="cat-hero-split-logo" src="' + esc(shop.logo_url) + '" alt="' + esc(shop.name || '') + '">' : '';
     return '<div class="cat-hero cat-hero-split">' +
       '<div class="cat-hero-split-desktop">' +
         '<div class="cat-hero-split-photo"><img src="' + esc(leftDesktop) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
-        '<div class="cat-hero-split-mid"><div class="cat-hero-name">' + name + '</div></div>' +
+        '<div class="cat-hero-split-mid">' + logo + '<div class="cat-hero-name">' + name + '</div></div>' +
         '<div class="cat-hero-split-photo"><img src="' + esc(rightDesktop) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
       '</div>' +
-      '<div class="cat-hero-mobile">' +
-        '<img class="cat-hero-mobile-img" src="' + esc(mobileUrl) + '" alt="' + esc(CAT_FILTER) + '">' +
+      '<div class="cat-hero-mobile" id="catHeroMobile">' +
+        '<div class="cat-hero-mob-track" id="catHeroMobTrack">' +
+          '<div class="cat-hero-mob-slide on"><img src="' + esc(leftMobile) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+          '<div class="cat-hero-mob-slide"><img src="' + esc(rightMobile) + '" alt="' + esc(CAT_FILTER) + '"></div>' +
+        '</div>' +
         '<div class="cat-hero-mobile-overlay"></div>' +
         '<div class="cat-hero-mobile-label">' + name + '</div>' +
+        '<div class="cat-hero-mob-dots" id="catHeroMobDots"><span class="cat-hero-mob-dot on"></span><span class="cat-hero-mob-dot"></span></div>' +
       '</div>' +
     '</div>';
   }
@@ -711,6 +749,8 @@ function renderCataloguePage() {
 
   renderFiltersPanel();
   initCardSwipe();
+  initCatHeroSwipe();
+  startCatHeroLoop();
   // close sort dropdown on outside click
   document.addEventListener('click', onDocClick);
 }
