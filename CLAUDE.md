@@ -245,6 +245,14 @@ The 20s timeout in `api()` covers the worst-case cold start.
     `original` was kept. `{side}_image_url/key` (legacy) is kept as a fallback only — new uploads
     write solely into `{side}_variants_json`. Frontend (`functions/api/catalog.js`) resolves each
     placement from variants first, legacy url second.
+  - **`openCropper` supports two-finger pinch-zoom** (shared by category photos, banners, and product
+    photos — it's one function). Tracks all active pointers in a `Map`; with 2 down it zooms anchored
+    to the live midpoint between them each move (so panning the midpoint while pinching also pans the
+    image) instead of the old single-pointer-only logic, which made a second finger's events fight the
+    first's and produced a jumpy, unusable pinch on mobile. Lifting one finger mid-pinch resumes
+    single-finger pan from that finger's current position (not its stale down-position) so there's no
+    jump. `setPointerCapture` is wrapped in try/catch (matching `releasePointerCapture`) since it can
+    throw for pointer IDs the browser doesn't consider active.
   - Migration note: the original `image_key`/`image_url` columns had `NOT NULL` — SQLite can't drop
     that via `ALTER TABLE`, so if this table is ever migrated again, rebuild it (`CREATE TABLE ... new`
     → `INSERT ... SELECT` → `DROP` → `RENAME`) rather than just adding columns, or `INSERT ... ON
@@ -276,7 +284,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=47 (styles v=62)**, **product.html = v=42 (styles v=62)**, **s.html (catalogue) = v=48 (styles v=62)**
+  Current versions: **admin.html = v=48 (styles v=62)**, **product.html = v=42 (styles v=62)**, **s.html (catalogue) = v=48 (styles v=62)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

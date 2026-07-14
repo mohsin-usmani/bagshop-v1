@@ -338,10 +338,61 @@ function openCropper(file, opts, onDone, onCancel) {
 
     clamp(active); render(active);
 
-    let dragging = false, px = 0, py = 0;
-    stage.addEventListener("pointerdown", (e) => { dragging = true; px = e.clientX; py = e.clientY; stage.setPointerCapture(e.pointerId); });
-    stage.addEventListener("pointermove", (e) => { if (!dragging) return; active.ox += e.clientX - px; active.oy += e.clientY - py; px = e.clientX; py = e.clientY; clamp(active); render(active); });
-    const stop = (e) => { dragging = false; try { stage.releasePointerCapture(e.pointerId); } catch (_) {} };
+    // Single finger/mouse: pans. Two fingers: pinch-zooms (anchored to the
+    // midpoint between them, updated every move) while also panning with
+    // whatever the midpoint itself drifts — the combined gesture people
+    // expect. Previously only one pointer was ever tracked, so a second
+    // finger's events fought the first's and produced a jumpy, unusable pinch.
+    const pointers = new Map();
+    let dragging = false, px = 0, py = 0, pinchLastDist = 0;
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    stage.addEventListener("pointerdown", (e) => {
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        dragging = false;
+        const [a, b] = [...pointers.values()];
+        pinchLastDist = dist(a, b);
+      } else if (pointers.size === 1) {
+        dragging = true; px = e.clientX; py = e.clientY;
+      }
+    });
+    stage.addEventListener("pointermove", (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const newDist = dist(a, b);
+        const m = mid(a, b);
+        const stageRect = stage.getBoundingClientRect();
+        const anchorX = m.x - stageRect.left, anchorY = m.y - stageRect.top;
+        const ix = (anchorX - active.ox) / active.scale, iy = (anchorY - active.oy) / active.scale;
+        const minScale = active.baseScale, maxScale = active.baseScale * 4;
+        active.scale = Math.min(maxScale, Math.max(minScale, active.scale * (newDist / pinchLastDist)));
+        active.ox = anchorX - ix * active.scale;
+        active.oy = anchorY - iy * active.scale;
+        clamp(active); render(active);
+        zoom.value = active.scale / active.baseScale;
+        pinchLastDist = newDist;
+      } else if (pointers.size === 1 && dragging) {
+        active.ox += e.clientX - px; active.oy += e.clientY - py; px = e.clientX; py = e.clientY;
+        clamp(active); render(active);
+      }
+    });
+    const stop = (e) => {
+      pointers.delete(e.pointerId);
+      try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (pointers.size === 1) {
+        // Resume single-finger pan from the remaining finger's current spot,
+        // not its stale down-position, so lifting one finger mid-pinch
+        // doesn't jump the image.
+        const remaining = [...pointers.values()][0];
+        px = remaining.x; py = remaining.y; dragging = true;
+      } else {
+        dragging = false;
+      }
+    };
     stage.addEventListener("pointerup", stop);
     stage.addEventListener("pointercancel", stop);
     zoom.addEventListener("input", () => setZoom(active, parseFloat(zoom.value)));
