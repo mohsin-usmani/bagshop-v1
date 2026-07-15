@@ -182,6 +182,18 @@ endpoint runs **3 queries in parallel** (articles, variants, photos) via `Promis
 this. First load after inactivity may take 5–10 seconds; subsequent loads are fast (<1s).
 The 20s timeout in `api()` covers the worst-case cold start.
 
+## Customer catalogue navigation (catalog.js)
+
+Home/category/new-arrivals are all client-side view swaps within `s.html` (`VIEW`/`CAT_FILTER`/
+`NEW_ARR` state + `renderApp()`), not real page loads. `syncCatalogUrl()` keeps the address bar in
+sync and decides `pushState` vs `replaceState` by comparing the new URL to the current one — a real
+navigation (different URL) pushes a new history entry; restoring state from the URL on initial load
+(same URL) just replaces. Previously this **always** used `replaceState`, so the SPA never added
+history entries — pressing the phone's/browser's Back button had nothing to step back into and
+exited the tab/site entirely instead of returning to the previous view. `applyViewFromUrl()` +
+a `popstate` listener re-render the correct view when Back/Forward actually lands on a pushed entry
+(without themselves calling `syncCatalogUrl()`, which would re-push and break the stack).
+
 ## Data model (D1 / SQLite)
 
 `settings(key, value)`
@@ -284,7 +296,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=49 (styles v=63)**, **product.html = v=42 (styles v=63)**, **s.html (catalogue) = v=49 (styles v=63)**
+  Current versions: **admin.html = v=49 (styles v=63)**, **product.html = v=42 (styles v=63)**, **s.html (catalogue) = v=50 (styles v=63)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

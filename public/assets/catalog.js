@@ -162,12 +162,16 @@ function goHome() {
   window.scrollTo(0, 0);
 }
 
-// Keep the browser URL in sync with the current view. Without this, tapping a
-// category only changes JS state, so the catalogue's history entry stays at the
-// home URL — and pressing Back from a product (top Back button OR the phone's back)
-// reloads that home URL, dumping the customer on the homepage instead of the
-// category they were in. replaceState updates the URL in place (no history pile-up),
-// so Back returns to /s.html?cat=… and init() re-opens that category.
+// Keep the browser URL in sync with the current view. Navigating within the
+// SPA (home -> category, category -> category, etc.) always used replaceState,
+// which never adds a history entry — so there was nothing for the phone's/
+// browser's Back button to step back to, and it exited the site/tab entirely
+// instead of returning to the previous view. Now it pushes a new entry
+// whenever the resulting URL actually differs from the current one (a real
+// navigation), and only replaces when it doesn't (e.g. the initial URL
+// restore on load, which shouldn't create an extra step). The popstate
+// listener below handles the Back/Forward button actually re-rendering the
+// right view once the browser moves to a pushed entry.
 function syncCatalogUrl() {
   const p = new URLSearchParams();
   if (TOKEN) p.set('t', TOKEN);
@@ -177,8 +181,36 @@ function syncCatalogUrl() {
     if (FILTER.color) p.set('color', FILTER.color);
     if (FILTER.size) p.set('size', FILTER.size);
   }
-  try { history.replaceState(null, '', '/s.html?' + p.toString()); } catch (e) {}
+  const newUrl = '/s.html?' + p.toString();
+  const current = location.pathname + location.search;
+  try {
+    if (newUrl !== current) history.pushState(null, '', newUrl);
+    else history.replaceState(null, '', newUrl);
+  } catch (e) {}
 }
+
+// Restores VIEW/CAT_FILTER/NEW_ARR/FILTER.color/size purely from the current
+// URL's query string, without touching history — shared by the initial page
+// load and the Back/Forward handler below.
+function applyViewFromUrl() {
+  const urlCat = qs('cat'), urlNew = qs('new');
+  if (urlNew) { VIEW = 'catalogue'; CAT_FILTER = ''; NEW_ARR = true; }
+  else if (urlCat) { VIEW = 'catalogue'; CAT_FILTER = urlCat; NEW_ARR = false; }
+  else { VIEW = 'home'; CAT_FILTER = ''; NEW_ARR = false; }
+  FILTER.color = qs('color') || '';
+  FILTER.size = qs('size') || '';
+}
+
+// Phone's/browser's Back or Forward button — the URL has already changed to
+// a previously pushed entry by the time this fires, so just re-render to
+// match it (no history call here, or we'd push right back on top of it).
+window.addEventListener('popstate', () => {
+  applyViewFromUrl();
+  closeMenu();
+  closeNavSearch();
+  renderApp();
+  window.scrollTo(0, 0);
+});
 
 function goCategory(cat, color, size) {
   VIEW = 'catalogue';
