@@ -1582,10 +1582,9 @@ async function deleteBanner(id) {
 // crop (closest to a portrait preview), then mobile/desktop, then the legacy
 // plain upload — mirrors the fallback order the customer site uses.
 function catImgThumb(row, side) {
-  if (row[side + "_image_url"]) return row[side + "_image_url"];
   let variants = {};
   try { variants = JSON.parse(row[side + "_variants_json"] || "{}") || {}; } catch (e) {}
-  return (variants.tile && variants.tile.url) || (variants.mobile && variants.mobile.url) || (variants.desktop && variants.desktop.url) || "";
+  return (variants.tile && variants.tile.url) || (variants.mobile && variants.mobile.url) || (variants.desktop && variants.desktop.url) || row[side + "_image_url"] || "";
 }
 
 function renderCatImgList() {
