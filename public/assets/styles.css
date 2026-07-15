@@ -652,7 +652,7 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .crop-title{font-weight:700;font-size:15px}
 .crop-x{background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);padding:0 4px}
 .crop-note{padding:8px 16px;font-size:12px;color:var(--muted);background:var(--bg2);border-bottom:1px solid var(--line)}
-.crop-stage{position:relative;margin:16px auto;overflow:hidden;background:#111;touch-action:none;cursor:move;flex-shrink:0}
+.crop-stage{position:relative;margin:16px auto;overflow:hidden;background:#111;touch-action:none;cursor:move;flex-shrink:0;border:2px solid #000;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
 .crop-stage img{position:absolute;top:0;left:0;transform-origin:0 0;pointer-events:none;max-width:none}
 .crop-grid{position:absolute;inset:0;pointer-events:none;border:1px solid rgba(255,255,255,.9);
   background-image:linear-gradient(rgba(255,255,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.35) 1px,transparent 1px);
