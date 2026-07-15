@@ -208,7 +208,19 @@ a `popstate` listener re-render the correct view when Back/Forward actually land
     customers persist for the create-link autocomplete. Links still expire via `expires_at`; expiry
     can be shifted by ± hours from the admin Customer Links tab (tokens PATCH `{id, delta_hours}`).
   - Migration for existing DBs: `ALTER TABLE orders ADD COLUMN customer_phone TEXT;`
-`banners(id, url, link, sort_order, created_at)`
+`banners(id, image_key, image_url, link_url, sort_order, is_active, variants_json)`
+  - Same independent per-target framing as category images: `variants_json` stores
+    `{desktop:{key,url,rect}, mobile:{key,url,rect}, original:{key,url}}` so the homepage banner can be
+    framed differently for Desktop (21:8) and Mobile (4:3) instead of one shared crop. `image_key`/
+    `image_url` hold the desktop crop as a representative fallback for older banners/consumers.
+    Admin UI: Banners tab → same `perTargetAdjust` cropper as category images (`openBannerCropper`,
+    `BANNER_TARGETS` in admin.js) — "Save all" does one POST per target (`target` field), all writing
+    to the same banner row (the first POST creates it and returns its `id`; later target POSTs in the
+    same save, and later **Adjust** re-crops, pass that `id` back so they update in place instead of
+    creating a new banner). Frontend (`functions/api/catalog.js`) resolves `desktop_url`/`mobile_url`;
+    the hero slide markup (`heroHTML()` in catalog.js) uses a `<picture>` with a `(min-width:640px)`
+    source so the browser picks the right crop per viewport — `.hero-slide picture{display:contents}`
+    keeps the wrapper from interfering with the slide's absolute-fill sizing.
 `categories(id, name, created_at)`
 `category_images(category PK, image_key, image_url [legacy, unused], left_image_key, left_image_url,
   right_image_key, right_image_url, left_variants_json, right_variants_json, mobile_source, tile_source)`
@@ -296,7 +308,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=49 (styles v=63)**, **product.html = v=42 (styles v=63)**, **s.html (catalogue) = v=50 (styles v=63)**
+  Current versions: **admin.html = v=50 (styles v=64)**, **product.html = v=42 (styles v=64)**, **s.html (catalogue) = v=51 (styles v=64)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

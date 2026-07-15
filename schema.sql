@@ -67,13 +67,19 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
 
+-- image_key/image_url hold a representative image (the "desktop" crop) for
+-- backward-compat consumers; variants_json stores independently-framed crops
+-- per placement — {desktop:{key,url,rect}, mobile:{...}, original:{...}} —
+-- same pattern as category_images, so desktop and mobile can be framed
+-- differently instead of sharing one centred crop.
 CREATE TABLE IF NOT EXISTS banners (
-  id         TEXT PRIMARY KEY,
-  image_key  TEXT NOT NULL,
-  image_url  TEXT NOT NULL,
-  link_url   TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  is_active  INTEGER NOT NULL DEFAULT 1
+  id            TEXT PRIMARY KEY,
+  image_key     TEXT NOT NULL,
+  image_url     TEXT NOT NULL,
+  link_url      TEXT,
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  is_active     INTEGER NOT NULL DEFAULT 1,
+  variants_json TEXT
 );
 
 -- Two photos per category (left/right) so the desktop category header can show

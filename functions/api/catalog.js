@@ -26,9 +26,17 @@ export async function onRequestGet(context) {
   const photos = (await env.DB.prepare(
     "SELECT * FROM photos ORDER BY sort_order"
   ).all()).results || [];
-  const banners = (await env.DB.prepare(
+  const bannerRows = (await env.DB.prepare(
     "SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order, id"
   ).all()).results || [];
+  // One photo per banner, independently framed per placement (desktop/mobile)
+  // instead of one shared crop — falls back to the plain upload when a
+  // placement hasn't been individually framed yet (older banners).
+  const banners = bannerRows.map((b) => {
+    const v = parseVariants(b.variants_json);
+    const plain = b.image_url || "";
+    return { ...b, desktop_url: (v.desktop && v.desktop.url) || plain, mobile_url: (v.mobile && v.mobile.url) || plain };
+  });
   const catImgRows = (await env.DB.prepare(
     "SELECT * FROM category_images"
   ).all()).results || [];

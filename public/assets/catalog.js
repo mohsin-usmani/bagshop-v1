@@ -517,7 +517,10 @@ function heroHTML() {
       banners.map((b, i) =>
         '<div class="hero-slide' + (i === 0 ? ' on' : '') + '" data-idx="' + i + '"' +
           (b.link_url ? ' style="cursor:pointer" onclick="bannerTap()"' : '') + '>' +
-          '<img src="' + esc(b.image_url) + '" alt="" ' + (i === 0 ? '' : 'loading="lazy"') + '>' +
+          '<picture>' +
+            '<source media="(min-width:640px)" srcset="' + esc(b.desktop_url || b.image_url) + '">' +
+            '<img src="' + esc(b.mobile_url || b.image_url) + '" alt="" ' + (i === 0 ? '' : 'loading="lazy"') + '>' +
+          '</picture>' +
         '</div>'
       ).join('') +
     '</div>' +

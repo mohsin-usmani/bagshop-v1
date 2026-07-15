@@ -7,23 +7,52 @@ export async function onRequestGet(context) {
   return json({ banners });
 }
 
+function parseVariants(json_str) {
+  if (!json_str) return {};
+  try { return JSON.parse(json_str) || {}; } catch (e) { return {}; }
+}
+
+// One photo, independently framed per placement (desktop/mobile), same
+// pattern as category images. target: "desktop" | "mobile" | "original".
+// id: omit to create a new banner; pass an existing banner's id to update
+// just its images (used by "Adjust" and by the later targets in the same
+// upload, since the first POST creates the row and returns its id).
 export async function onRequestPost(context) {
   const { request, env } = context;
   if (!isAdmin(context)) return json({ error: "auth" }, 401);
   const fd = await request.formData();
   const file = fd.get("file");
-  const link_url = fd.get("link_url") || "";
-  const sort_order = Number(fd.get("sort_order") || 0);
-  if (!file || !file.name) return json({ error: "no file" }, 400);
-  const id = newId();
-  const key = "banners/" + id + "-" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const target = ["desktop", "mobile", "original"].includes(fd.get("target")) ? fd.get("target") : null;
+  const existingId = fd.get("id") || "";
+  if (!file || !target) return json({ error: "missing file or target" }, 400);
+  let rect = null;
+  try { rect = JSON.parse(fd.get("rect") || "null"); } catch (e) {}
+
+  const id = existingId || newId();
+  let variants = {};
+  if (existingId) {
+    const old = await env.DB.prepare("SELECT variants_json FROM banners WHERE id=?").bind(existingId).first();
+    if (old) variants = parseVariants(old.variants_json);
+  }
+  if (variants[target] && variants[target].key) { try { await env.BUCKET.delete(variants[target].key); } catch (e) {} }
+  const key = "banners/" + id + "-" + target + "-" + Date.now();
   const arr = await file.arrayBuffer();
   await env.BUCKET.put(key, arr, { httpMetadata: { contentType: file.type || "image/jpeg" } });
-  const image_url = "/api/img/" + key;
-  await env.DB.prepare(
-    "INSERT INTO banners (id, image_key, image_url, link_url, sort_order, is_active) VALUES (?,?,?,?,?,1)"
-  ).bind(id, key, image_url, link_url, sort_order).run();
-  return json({ ok: true, id, image_url });
+  const url = "/api/img/" + key;
+  variants[target] = rect ? { key, url, rect } : { key, url };
+
+  const rep = variants.desktop || variants.mobile;
+  if (existingId) {
+    await env.DB.prepare("UPDATE banners SET image_key=?, image_url=?, variants_json=? WHERE id=?")
+      .bind(rep.key, rep.url, JSON.stringify(variants), existingId).run();
+  } else {
+    const link_url = fd.get("link_url") || "";
+    const sort_order = Number(fd.get("sort_order") || 0);
+    await env.DB.prepare(
+      "INSERT INTO banners (id, image_key, image_url, link_url, sort_order, is_active, variants_json) VALUES (?,?,?,?,?,1,?)"
+    ).bind(id, rep.key, rep.url, link_url, sort_order, JSON.stringify(variants)).run();
+  }
+  return json({ ok: true, id, image_url: url, target });
 }
 
 export async function onRequestPatch(context) {
@@ -43,8 +72,13 @@ export async function onRequestDelete(context) {
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   if (!id) return json({ error: "missing id" }, 400);
-  const row = await env.DB.prepare("SELECT image_key FROM banners WHERE id=?").bind(id).first();
-  if (row && row.image_key) { try { await env.BUCKET.delete(row.image_key); } catch (e) {} }
+  const row = await env.DB.prepare("SELECT image_key, variants_json FROM banners WHERE id=?").bind(id).first();
+  if (row) {
+    if (row.image_key) { try { await env.BUCKET.delete(row.image_key); } catch (e) {} }
+    for (const v of Object.values(parseVariants(row.variants_json))) {
+      if (v && v.key && v.key !== row.image_key) { try { await env.BUCKET.delete(v.key); } catch (e) {} }
+    }
+  }
   await env.DB.prepare("DELETE FROM banners WHERE id=?").bind(id).run();
   return json({ ok: true });
 }

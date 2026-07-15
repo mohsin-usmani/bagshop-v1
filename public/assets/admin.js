@@ -1484,6 +1484,14 @@ async function deleteOrder(id) {
 }
 
 // ---- banners ----
+// Best preview for a device slot: the independently-framed crop for that
+// target, falling back to the plain (shared) upload for older banners.
+function bannerThumb(b, target) {
+  let variants = {};
+  try { variants = JSON.parse(b.variants_json || "{}") || {}; } catch (e) {}
+  return (variants[target] && variants[target].url) || b.image_url || "";
+}
+
 async function loadBanners() {
   const { data } = await api("/api/admin/banners");
   if (!data || data.error) return;
@@ -1495,8 +1503,8 @@ async function loadBanners() {
     el.innerHTML = banners.map(b =>
       '<div class="banner-item">' +
         '<div class="banner-previews">' +
-          '<div class="bp-box bp-desktop"><img src="' + esc(b.image_url) + '" alt=""><span class="bp-tag">Desktop</span></div>' +
-          '<div class="bp-box bp-mobile"><img src="' + esc(b.image_url) + '" alt=""><span class="bp-tag">Mobile</span></div>' +
+          '<div class="bp-box bp-desktop"><img src="' + esc(bannerThumb(b, "desktop")) + '" alt=""><span class="bp-tag">Desktop</span></div>' +
+          '<div class="bp-box bp-mobile"><img src="' + esc(bannerThumb(b, "mobile")) + '" alt=""><span class="bp-tag">Mobile</span></div>' +
         '</div>' +
         '<div class="banner-info">' +
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
@@ -1510,6 +1518,7 @@ async function loadBanners() {
             '<label style="display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:normal">' +
               '<input type="checkbox" id="bv_' + b.id + '" data-orig="' + (b.is_active ? '1' : '0') + '" ' + (b.is_active ? 'checked' : '') + ' onchange="bannerRowDirty(' + jq(b.id) + ')" style="width:auto"> Visible' +
             '</label>' +
+            '<button class="btn sm ghost" onclick="adjustBanner(' + jq(b.id) + ')">Adjust</button>' +
             '<button class="btn danger sm" onclick="deleteBanner(' + jq(b.id) + ')">Delete</button>' +
           '</div>' +
         '</div>' +
@@ -1519,27 +1528,74 @@ async function loadBanners() {
   renderCatImgList();
 }
 
-// Picking a banner photo opens the crop preview immediately — same flow as
-// adding a product photo. The cropper shows both the Desktop (21:8) and Mobile
-// (4:3) shapes via the "safe area" overlay, so the ratio is written for both.
+// One uploaded photo, independently framed per placement (desktop/mobile) —
+// same perTargetAdjust cropper as category images, instead of one shared
+// crop with a "safe area" preview.
+const BANNER_TARGETS = [
+  { key: "desktop", name: "Desktop (21:8)", ratio: 21 / 8 },
+  { key: "mobile", name: "Mobile (4:3)", ratio: 4 / 3 },
+];
+
+// existingId: omit to create a new banner; pass an existing banner's id to
+// re-frame its photo in place ("Adjust") instead of creating a new one.
+function openBannerCropper(file, existingId, link, initialRects) {
+  openCropper(file, {
+    perTargetAdjust: true,
+    title: "Crop banner",
+    ratioLabel: "This photo is shown at a few sizes — frame each one separately so the subject looks right everywhere.",
+    maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner",
+    deviceCrops: BANNER_TARGETS,
+    initialRects,
+  }, async (out) => {
+    toast("Uploading…");
+    let bannerId = existingId || "";
+    for (const dc of BANNER_TARGETS.concat([{ key: "original" }])) {
+      const fd = new FormData();
+      fd.append("file", out[dc.key].file); fd.append("target", dc.key);
+      if (out[dc.key].rect) fd.append("rect", JSON.stringify(out[dc.key].rect));
+      if (bannerId) fd.append("id", bannerId);
+      else fd.append("link_url", link || "");
+      const res = await fetch("/api/admin/banners", { method: "POST", body: fd });
+      if (!res.ok) { toast("Upload failed"); loadBanners(); return; }
+      const data = await res.json();
+      bannerId = data.id;
+    }
+    toast(existingId ? "Banner updated" : "Banner added");
+    if (!existingId) document.getElementById("bnr_link").value = "";
+    loadBanners();
+  });
+}
+
 async function onBannerFile(fileInput) {
   if (!fileInput.files.length) return;
   const link = document.getElementById("bnr_link").value.trim();
   const bannerRes = await api("/api/admin/banners");
   const currentCount = (bannerRes.data?.banners || []).length;
   if (currentCount >= 5) { fileInput.value = ""; return toast("Maximum 5 banners allowed. Delete one first."); }
-  openCropper(fileInput.files[0], { ratio: 16 / 7, title: "Crop banner", ratioLabel: "Homepage banner — each coloured box below shows exactly what that device will display; keep the important part inside all of them", maxEdge: 1600, type: "image/jpeg", quality: 0.85, name: "banner", deviceCrops: [{ name: "Mobile (4:3)", ratio: 4 / 3 }, { name: "Desktop (21:8)", ratio: 21 / 8 }] },
-    async (file) => {
-      toast("Uploading…");
-      const fd = new FormData(); fd.append("file", file); fd.append("link_url", link);
-      const res = await fetch("/api/admin/banners", { method: "POST", body: fd });
-      fileInput.value = "";
-      if (!res.ok) return toast("Upload failed");
-      toast("Banner added");
-      document.getElementById("bnr_link").value = "";
-      loadBanners();
-    },
-    () => { fileInput.value = ""; }); // reset on cancel so the same file can be re-picked
+  const file = fileInput.files[0];
+  fileInput.value = "";
+  openBannerCropper(file, null, link);
+}
+
+// Re-open the cropper on an existing banner's photo without re-picking the
+// file — reframes from the saved unmodified original when available, or the
+// best existing crop for banners uploaded before "original" was kept.
+async function adjustBanner(id) {
+  const bannerRes = await api("/api/admin/banners");
+  const b = (bannerRes.data?.banners || []).find((x) => x.id === id);
+  if (!b) return toast("Not found");
+  let variants = {};
+  try { variants = JSON.parse(b.variants_json || "{}") || {}; } catch (e) {}
+  const src = (variants.original && variants.original.url) || bannerThumb(b, "desktop") || bannerThumb(b, "mobile");
+  if (!src) return toast("No photo to adjust");
+  toast("Loading photo…");
+  const res = await fetch(src);
+  if (!res.ok) return toast("Could not load photo");
+  const blob = await res.blob();
+  const file = new File([blob], "banner.jpg", { type: blob.type || "image/jpeg" });
+  const initialRects = variants.original ? {} : undefined;
+  if (initialRects) BANNER_TARGETS.forEach((dc) => { if (variants[dc.key] && variants[dc.key].rect) initialRects[dc.key] = variants[dc.key].rect; });
+  openBannerCropper(file, id, b.link_url, initialRects);
 }
 
 // One Save button covers both the link field and the Visible tick — tapping
