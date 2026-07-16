@@ -77,7 +77,6 @@ async function loadSettings() {
   st_name.value = SETTINGS.shop_name || "";
   st_phone.value = SETTINGS.owner_phone || "";
   st_cur.value = SETTINGS.currency || "Rs.";
-  st_hours.value = SETTINGS.default_link_hours || "4";
   st_show.value = SETTINGS.show_prices || "1";
   if (document.getElementById("st_about")) document.getElementById("st_about").value = SETTINGS.about_us || "";
   if (document.getElementById("st_ig")) document.getElementById("st_ig").value = SETTINGS.instagram_url || "";
@@ -433,7 +432,7 @@ function cropFilesSequentially(files, opts, uploadOne, done) {
 async function saveSettings() {
   const body = {
     shop_name: st_name.value, owner_phone: st_phone.value, currency: st_cur.value,
-    default_link_hours: st_hours.value, show_prices: st_show.value,
+    show_prices: st_show.value,
     about_us: (document.getElementById("st_about") || {}).value || "",
     instagram_url: (document.getElementById("st_ig") || {}).value || "",
     facebook_url: (document.getElementById("st_fb") || {}).value || "",

@@ -1,4 +1,4 @@
-import { json, isAdmin, newId, newToken, sha256hex, getSettings } from "../_util.js";
+import { json, isAdmin, newId, newToken, sha256hex } from "../_util.js";
 
 // Distinct past customers (name + phone) for the create-link autocomplete.
 // Sourced from BOTH access_tokens and orders so repeat buyers keep autofilling
@@ -49,8 +49,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   if (!isAdmin(context)) return json({ error: "auth" }, 401);
   const b = await request.json();
-  const settings = await getSettings(env);
-  const hours = Math.max(1, parseInt(b.hours) || parseInt(settings.default_link_hours) || 4);
+  const hours = Math.max(1, parseInt(b.hours) || 24);
 
   // Admin enters a 10-digit mobile; add the 91 country code (needed for wa.me).
   let phone = (b.phone || "").replace(/[^0-9]/g, "");

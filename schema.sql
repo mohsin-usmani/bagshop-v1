@@ -113,7 +113,6 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('owner_phone',        '919999999999'),
   ('currency',           'Rs.'),
   ('show_prices',        '1'),
-  ('default_link_hours', '4'),
   ('about_us',           'Your trusted wholesale bag partner. Minimum order 40 pcs per article.'),
   ('instagram_url',      ''),
   ('facebook_url',       ''),

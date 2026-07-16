@@ -124,7 +124,7 @@
         <div class="field" style="position:relative"><label>Customer name / shop</label><input id="lk_label" autocomplete="off" placeholder="Rahul Bags" oninput="acFilter('label')"><div class="ac-drop" id="lk_label_ac"></div></div>
         <div class="field" style="position:relative"><label>WhatsApp number (10-digit mobile — +91 added automatically)</label><input id="lk_phone" autocomplete="off" inputmode="numeric" placeholder="9812345678" oninput="acFilter('phone')"><div class="ac-drop" id="lk_phone_ac"></div></div>
       </div>
-      <div class="field" style="max-width:220px"><label>Valid for (hours)</label><input id="lk_hours" type="number" value="4"></div>
+      <div class="field" style="max-width:220px"><label>Valid for (hours)</label><input id="lk_hours" type="number" value="24"></div>
       <button class="btn" onclick="createLink()">Create link</button>
     </div>
     <div id="linkResult"></div>
@@ -169,10 +169,7 @@
     <div class="card artcard" style="max-width:560px">
       <div class="field"><label>Shop name</label><input id="st_name"></div>
       <div class="field"><label>Your WhatsApp number (orders go here — country code, no +)</label><input id="st_phone" placeholder="919198xxxxxx12"></div>
-      <div class="grid2">
-        <div class="field"><label>Currency symbol</label><input id="st_cur"></div>
-        <div class="field"><label>Default link hours</label><input id="st_hours" type="number"></div>
-      </div>
+      <div class="field"><label>Currency symbol</label><input id="st_cur"></div>
       <div class="field"><label>Show prices in catalogue?</label>
         <select id="st_show"><option value="1">Yes — show prices</option><option value="0">No — hide prices</option></select>
       </div>
@@ -202,6 +199,6 @@
 </div>
 
 <script src="/assets/common.js?v=31"></script>
-<script src="/assets/admin.js?v=50"></script>
+<script src="/assets/admin.js?v=51"></script>
 </body>
 </html>
