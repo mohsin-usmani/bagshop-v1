@@ -14,7 +14,8 @@
 @font-face{font-family:'Anton';src:url('/assets/fonts/Anton-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
 
 :root {
-  --brand:   #00a1e0;  /* Samsonite signature blue */
+  --brand:   #000000;  /* black — sole accent colour for the black-and-white theme */
+  --brand-hover: #2a2a2a;
   --text:    #212529;
   --muted:   #6c757d;
   --line:    #dee2e6;
@@ -23,10 +24,18 @@
   --danger:  #c00;
   --success: #008827;
   --amber:   #C8960C;
-  --navy:    #003366;
   --cart:    #171717;  /* cart accent — charcoal/black, matches the PDP "Add to cart" */
   --cart-hover: #000000;
 }
+/* Keep native form-control accents (checkbox/radio ticks, range sliders —
+   e.g. the crop tool's zoom control) and the text-selection highlight
+   on-brand instead of the browser's default blue. */
+::selection{background:#000;color:#fff}
+input[type="checkbox"],input[type="radio"],input[type="range"]{accent-color:var(--brand)}
+/* Safety net for any element that doesn't set its own focus style — replaces
+   the browser's default blue focus ring with a black one. Only fires for
+   keyboard/programmatic focus (:focus-visible), not mouse clicks. */
+:focus-visible{outline:2px solid #000;outline-offset:2px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'GT-America','Gotham','HelveticaNeue','Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;letter-spacing:.01em}
 /* Mobile browsers flash their own default highlight color on every tap unless
@@ -179,7 +188,7 @@ img{display:block;max-width:100%}
 .hero-cta{position:absolute;bottom:24px;left:20px;z-index:3;display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none}
 @media(min-width:640px){.hero-cta{bottom:36px;left:40px}}
 .hero-cta-btn{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;background:var(--brand);color:#fff;border:none;font-family:inherit;font-size:13px;font-weight:700;padding:13px 26px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.25);transition:background .15s}
-.hero-cta-btn:hover{background:#0090c9}
+.hero-cta-btn:hover{background:var(--brand-hover)}
 @media(min-width:640px){.hero-cta-btn{font-size:14px;padding:15px 32px}}
 
 /* Category tiles section */
@@ -216,7 +225,7 @@ img{display:block;max-width:100%}
 .new-arrivals-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px;margin-bottom:20px}
 .new-arrivals-head h2{font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text)}
 .view-all-link{font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;color:var(--brand);text-decoration:underline;text-underline-offset:3px}
-.view-all-link:hover{color:#0090c9}
+.view-all-link:hover{color:var(--brand-hover)}
 /* mobile: horizontal scroll; desktop: 4-col grid */
 .na-scroll{display:flex;gap:16px;background:var(--bg);overflow-x:auto;scrollbar-width:none;padding:0 16px}
 .na-scroll::-webkit-scrollbar{display:none}
@@ -345,7 +354,7 @@ img{display:block;max-width:100%}
 .filter-panel-body{flex:1;overflow-y:auto;padding:0}
 .filter-panel-foot{padding:16px;border-top:1px solid var(--line);flex-shrink:0}
 .btn-apply-filters{width:100%;background:var(--brand);color:#fff;border:none;font:inherit;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:15px;cursor:pointer}
-.btn-apply-filters:hover{background:#0090c9}
+.btn-apply-filters:hover{background:var(--brand-hover)}
 
 /* Filter accordion */
 .filter-section{border-bottom:1px solid var(--line)}
@@ -547,7 +556,7 @@ img{display:block;max-width:100%}
 .wrap{max-width:1000px;margin:0 auto;padding:16px}
 .muted{color:var(--muted)}
 .btn{display:inline-flex;align-items:center;gap:6px;border:0;padding:10px 18px;font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;background:var(--brand);color:#fff;font-family:inherit;transition:background .15s}
-.btn:hover{background:#0090c9}
+.btn:hover{background:var(--brand-hover)}
 .btn.amber{background:var(--amber);color:#fff}
 .btn.ghost{background:#fff;color:var(--text);border:1.5px solid var(--line)}
 .btn.ghost:hover{border-color:var(--brand)}
@@ -749,7 +758,7 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 /* inline-expand add form (both places) */
 .vadd{margin-top:4px}
 .vadd-btn{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1.5px dashed var(--line);color:var(--brand);font-family:inherit;font-size:13px;font-weight:700;padding:11px 18px;border-radius:8px;cursor:pointer;transition:all .15s}
-.vadd-btn:hover{border-color:var(--brand);background:#eef7fb}
+.vadd-btn:hover{border-color:var(--brand);background:#f0f0f0}
 .vadd-form{display:none;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}
 .vadd-fields{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .vadd-f{flex:1;min-width:100px}
@@ -837,7 +846,7 @@ label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bot
 .cat-hero-img{width:100%;display:block;object-fit:cover;object-position:center;opacity:.55;aspect-ratio:16/3}
 @media(max-width:639px){.cat-hero-img{aspect-ratio:3/2}}
 /* fallback banner when a category has no uploaded image */
-.cat-hero-plain{aspect-ratio:16/3;background:linear-gradient(120deg,#075b7d,#00a1e0)}
+.cat-hero-plain{aspect-ratio:16/3;background:linear-gradient(120deg,#2b2b2b,#000)}
 @media(max-width:639px){.cat-hero-plain{aspect-ratio:5/2}}
 .cat-hero-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
 .cat-hero-name{font-size:36px;font-weight:900;color:#fff;letter-spacing:4px;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.4)}

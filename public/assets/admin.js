@@ -1991,7 +1991,7 @@ function authFail(data) {
     '<div style="background:#fff;border:1px solid #dee2e6;border-radius:4px;padding:48px 40px;max-width:420px;width:100%">' +
     '<h2 style="margin-bottom:12px;font-size:20px">' + title + '</h2>' +
     '<p style="color:#555;margin-bottom:28px;font-size:14px;line-height:1.6;text-align:left">' + body + '</p>' +
-    '<button onclick="doSignIn()" style="background:#00a1e0;color:#fff;padding:12px 32px;' +
+    '<button onclick="doSignIn()" style="background:#000;color:#fff;padding:12px 32px;' +
     'border:none;border-radius:2px;font-weight:700;font-size:14px;letter-spacing:.02em;cursor:pointer">' + btnLabel + '</button>' +
     '</div></div>';
 }

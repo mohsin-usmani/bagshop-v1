@@ -40,7 +40,8 @@ public/
   s.html + assets/catalog.js   CUSTOMER catalogue
   admin.html + assets/admin.js OWNER admin panel
   product.html + assets/product.js  product detail page
-  assets/styles.css        shared styling (teal #0E6B57 / amber #E0A03C / ink #12332B)
+  assets/styles.css        shared styling (strict black-and-white — `--brand:#000000`/`--brand-hover:#2a2a2a`
+                            are the only accent colours; `--amber` exists for a couple of secondary badges only)
   assets/common.js         fetch helper (with 20s AbortController timeout), toast, image compression
   _headers                 Cache-Control: no-store on /admin.html
 
@@ -302,13 +303,21 @@ duplicate-article, price tiers, analytics)
 
 ## Conventions & guardrails
 
+- **Strict black-and-white UI aesthetic.** `--brand:#000000` / `--brand-hover:#2a2a2a` are the *only*
+  accent colours for buttons, links, borders, badges, focus rings, and form-control accents
+  (`accent-color` on checkbox/radio/range inputs) — anywhere the UI previously used the old
+  `#00a1e0` "Samsonite signature blue" (or any other blue) should be `var(--brand)`/`var(--brand-hover)`
+  instead. `--danger` (red), `--success` (green), and `--amber` (secondary badge colour) are the only
+  other accents, used sparingly for their specific semantic meaning — not general UI chrome. Product
+  **colour swatch** hex maps (`catalog.js`/`admin.js`/`product.js` — "Navy", "Sky Blue", etc.) are
+  real product-attribute data, not UI accents, and are exempt from this rule.
 - Stay **free-tier only**. No paid add-ons, no heavy dependencies, no build step.
 - **Security:** Keep `DEV=0` in production. Never commit secrets.
 - Tokens stored **hashed** — never store or log raw tokens.
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=51 (styles v=65)**, **product.html = v=42 (styles v=65)**, **s.html (catalogue) = v=51 (styles v=65)**
+  Current versions: **admin.html = v=52 (styles v=66)**, **product.html = v=42 (styles v=66)**, **s.html (catalogue) = v=51 (styles v=66)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
