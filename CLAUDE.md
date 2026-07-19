@@ -39,6 +39,9 @@ public/
   index.html               landing
   s.html + assets/catalog.js   CUSTOMER catalogue
   admin.html + assets/admin.js OWNER admin panel
+  admin-price.html + assets/admin-price.js  OWNER per-order pricing screen (prices-hidden flow;
+                            opened via the link embedded in a customer's order WhatsApp message —
+                            path starts with `admin` so the existing CF Access `admin*` rule covers it)
   product.html + assets/product.js  product detail page
   assets/styles.css        shared styling (strict black-and-white — `--brand:#000000`/`--brand-hover:#2a2a2a`
                             are the only accent colours; `--amber` exists for a couple of secondary badges only)
@@ -59,6 +62,9 @@ functions/
   api/admin/photos.js      POST upload → R2; DELETE
   api/admin/tokens.js      GET list; POST create; PATCH revoke
   api/admin/orders.js      GET order log
+  api/admin/price-order.js  GET load one order for pricing; POST save per-line prices → recompute
+                            est_total, set status='priced', return a wa.me link to the customer with
+                            the priced summary. Used by the prices-hidden per-order pricing flow (below)
   api/admin/settings.js    GET/POST shop settings
   api/admin/login-bounce.js  GET → 302 /admin.html (CF Access login trigger — see Auth section)
   api/admin/status.js      GET → {auth, articles_in_db, variants_in_db} (diagnostic)
@@ -226,6 +232,18 @@ a `popstate` listener re-render the correct view when Back/Forward actually land
 `orders(id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status)`
   - `customer_phone` copied from the link at checkout so a customer's history is preserved even
     if the link is later revoked. `items_json` stores an enriched snapshot (code/name/colour/size/qty/price).
+  - **status values:** `sent` (prices-shown order, as before), `awaiting_price` (order placed while
+    the catalogue was price-hidden — snapshot stored with `price:null` and `est_total:0`), `priced`
+    (owner has since set per-customer prices via /admin-price — snapshot prices + est_total filled in).
+  - **Prices-hidden per-order pricing flow** (when `settings.show_prices !== "1"`): `order.js` sets
+    status `awaiting_price`, stores no prices, and appends an owner-only `/admin-price?order=<id>`
+    link to the customer's outgoing WhatsApp message. The owner opens that link (CF Access gated),
+    types a per-pc price for every line, and saves — `api/admin/price-order.js` writes the prices
+    into `items_json`, recomputes `est_total`, flips status to `priced`, and returns a `wa.me/<customer
+    phone>` link the owner sends the priced summary with. `history.js` returns `priced:(status==='priced')`
+    and `catalog.js` `renderHistory()` shows that order's prices/total even while the catalogue is
+    otherwise price-hidden (`showThis = SHOW_PRICES || o.priced`). When prices are shown, none of this
+    triggers — behaviour is unchanged.
   - NOTE: access_tokens are **no longer auto-purged** (the old 7-day cleanup was removed) so past
     customers persist for the create-link autocomplete. Links still expire via `expires_at`; expiry
     can be shifted by ± hours from the admin Customer Links tab (tokens PATCH `{id, delta_hours}`).
@@ -338,7 +356,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=53 (styles v=66)**, **product.html = v=43 (styles v=66)**, **s.html (catalogue) = v=52 (styles v=66)**
+  Current versions: **admin.html = v=53 (styles v=66)**, **product.html = v=43 (styles v=66)**, **s.html (catalogue) = v=53 (styles v=66)**, **admin-price.html = admin-price.js v=1 (styles v=66)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

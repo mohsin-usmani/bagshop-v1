@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Set order prices</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='%23000000'/%3E%3Ctext x='50' y='69' text-anchor='middle' fill='white' font-family='Arial%2Csans-serif' font-weight='700' font-style='italic' font-size='50'%3EFx%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/styles.css?v=66">
+<style>
+  /* Page-specific styling kept here so shared styles.css isn't touched. */
+  .ap-wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; }
+  .ap-head { margin: 8px 0 4px; font-size: 22px; font-weight: 800; }
+  .ap-sub  { color: #666; margin: 0 0 20px; font-size: 14px; }
+  .ap-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .ap-item-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .ap-item-name { font-weight: 700; }
+  .ap-item-meta { color: #666; font-size: 13px; margin-top: 2px; }
+  .ap-item-qty { color: #000; font-weight: 700; white-space: nowrap; }
+  .ap-price-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .ap-price-row label { font-size: 13px; color: #444; }
+  .ap-price-in { display: flex; align-items: center; gap: 6px; border: 1px solid #ccc; border-radius: 8px; padding: 6px 10px; }
+  .ap-price-in input { border: 0; outline: 0; width: 90px; font-size: 15px; font-weight: 700; text-align: right; }
+  .ap-line-total { margin-left: auto; font-weight: 700; }
+  .ap-grand { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 2px 8px; font-size: 18px; font-weight: 800; }
+  .ap-actions { position: sticky; bottom: 0; background: #fff; padding: 14px 0 4px; border-top: 1px solid #eee; }
+  .ap-actions .btn { width: 100%; }
+  .ap-actions .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .ap-note { color: #666; font-size: 13px; margin-top: 10px; }
+  .ap-summary { white-space: pre-wrap; background: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; font-size: 13px; margin-top: 12px; }
+  .ap-msg { padding: 24px 4px; color: #444; }
+</style>
+</head>
+<body>
+  <div class="ap-wrap" id="apWrap">
+    <div class="ap-msg" id="apStatus">Loading order…</div>
+  </div>
+
+  <script src="/assets/common.js?v=35"></script>
+  <script src="/assets/admin-price.js?v=1"></script>
+</body>
+</html>

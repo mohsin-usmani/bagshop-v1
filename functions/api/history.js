@@ -21,7 +21,9 @@ export async function onRequestGet(context) {
   const orders = rows.map((r) => {
     let items = [];
     try { items = JSON.parse(r.items_json) || []; } catch (e) {}
-    return { id: r.id, items, est_total: r.est_total, created_at: r.created_at, status: r.status };
+    // priced === the owner set per-customer prices for this order via /admin-price, so its
+    // prices should show in history even when the catalogue is otherwise price-hidden.
+    return { id: r.id, items, est_total: r.est_total, created_at: r.created_at, status: r.status, priced: r.status === "priced" };
   });
 
   return json({ orders, customer: tok.customer_label || "" });

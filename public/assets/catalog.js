@@ -1471,13 +1471,18 @@ function renderHistory(orders) {
   body.innerHTML = orders.map(o => {
     const dt = new Date(o.created_at);
     const dateStr = isNaN(dt) ? '' : dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    // Show prices when the catalogue shows them, OR when the owner priced this specific
+    // order for this customer (priced orders carry their own negotiated prices even while
+    // the catalogue is otherwise price-hidden).
+    const showThis = SHOW_PRICES || o.priced;
     const lines = (o.items || []).map(it => {
       const bits = [esc(it.name || it.article_code || 'Item')];
       if (it.color) bits.push(esc(it.color));
       if (it.size) bits.push(esc(it.size));
-      return '<div class="hist-line"><span>' + bits.join(' · ') + '</span><span class="muted">×' + (it.qty || 1) + '</span></div>';
+      const priceStr = (showThis && it.price != null) ? '<span class="muted"> · ' + esc(CUR) + ' ' + it.price + '/pc</span>' : '';
+      return '<div class="hist-line"><span>' + bits.join(' · ') + priceStr + '</span><span class="muted">×' + (it.qty || 1) + '</span></div>';
     }).join('');
-    const totalStr = (SHOW_PRICES && o.est_total) ? '<span class="hist-total">' + esc(CUR) + ' ' + o.est_total + '</span>' : '';
+    const totalStr = (showThis && o.est_total) ? '<span class="hist-total">' + esc(CUR) + ' ' + o.est_total + '</span>' : '';
     return '<div class="hist-order">' +
       '<div class="hist-head"><strong>' + dateStr + '</strong>' + totalStr + '</div>' +
       lines +

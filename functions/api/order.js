@@ -26,6 +26,7 @@ export async function onRequestPost(context) {
   const map = {};
   rows.forEach((r) => (map[r.id] = r));
 
+  const orderId = newId();
   const lines = [];
   const snapshot = []; // stored on the order so history reads it without re-joining variants
   let total = 0;
@@ -41,8 +42,15 @@ export async function onRequestPost(context) {
     parts.push(`Qty ${qty}`);
     if (showPrices) parts.push(`${cur}${price}/pc`);
     lines.push(parts.join(" | "));
-    snapshot.push({ variant_id: v.id, article_code: v.article_code, name: v.name, color: v.color, size: v.size, qty, price });
+    // When prices are hidden the catalogue price is meaningless to the customer — the owner
+    // sets a per-customer price later via /admin-price, which overwrites this snapshot. Store
+    // null so nothing stale can surface in history before that happens.
+    snapshot.push({ variant_id: v.id, article_code: v.article_code, name: v.name, color: v.color, size: v.size, qty, price: showPrices ? price : null });
   });
+
+  // Owner-only link to price this specific order when prices are hidden (see /admin-price).
+  // Goes into the customer's outgoing message so the owner can open it straight from WhatsApp.
+  const priceLink = `${new URL(request.url).origin}/admin-price?order=${orderId}`;
 
   const text = [
     `New Order - ${settings.shop_name || "Shop"}`,
@@ -51,12 +59,13 @@ export async function onRequestPost(context) {
     ...lines,
     "--------------------------------",
     showPrices ? `Indicative total: ${cur}${total}` : "Prices to be confirmed",
+    showPrices ? null : `Owner: add prices -> ${priceLink}`,
     "Sent via catalogue",
   ].filter(Boolean).join("\n");
 
   await env.DB.prepare(
     "INSERT INTO orders (id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status) VALUES (?,?,?,?,?,?,?,?)"
-  ).bind(newId(), tok.id, tok.customer_label || "", (tok.customer_phone || "").replace(/[^0-9]/g, ""), JSON.stringify(snapshot), total, Date.now(), "sent").run();
+  ).bind(orderId, tok.id, tok.customer_label || "", (tok.customer_phone || "").replace(/[^0-9]/g, ""), JSON.stringify(snapshot), showPrices ? total : 0, Date.now(), showPrices ? "sent" : "awaiting_price").run();
 
   const wa = `https://wa.me/${settings.owner_phone}?text=${encodeURIComponent(text)}`;
   return json({ ok: true, whatsapp: wa });
