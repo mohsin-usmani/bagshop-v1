@@ -95,11 +95,9 @@ function resolvePhotos(a, color) {
   return [{ url: getSmartPlaceholder(a), _placeholder: true }];
 }
 
-// ── SVG icons ──
+// ── SVG icons (IC_IG/IC_FB moved to common.js — shared with product.js's footer) ──
 const IC_CART = '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>';
 const IC_OK = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
-const IC_IG = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
-const IC_FB = '<svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>';
 const IC_INFO = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
 const IC_FIRE = '⚡';
 
@@ -561,44 +559,7 @@ function catTilesHTML() {
   '</div>';
 }
 
-function footerHTML() {
-  const shop = DATA.shop || {};
-  return '<footer class="site-footer">' +
-    '<div class="footer-inner">' +
-      '<div class="footer-cols">' +
-        // Col 1 — brand + about
-        '<div class="footer-col">' +
-          '<div class="footer-brand">' + esc(shop.name || 'Shop') + '</div>' +
-          (shop.about_us ? '<p class="footer-about">' + esc(shop.about_us) + '</p>' : '') +
-        '</div>' +
-        // Col 2 — Support
-        '<div class="footer-col">' +
-          '<div class="footer-col-head">Support</div>' +
-          '<ul class="footer-links">' +
-            '<li>How to Order</li>' +
-            '<li>Wholesale Pricing</li>' +
-            '<li>Contact Us on WhatsApp</li>' +
-          '</ul>' +
-        '</div>' +
-        // Col 3 — Follow Us
-        '<div class="footer-col">' +
-          '<div class="footer-col-head">Follow Us</div>' +
-          '<div class="footer-social">' +
-            (shop.instagram_url
-              ? '<a class="footer-social-link" href="' + esc(shop.instagram_url) + '" target="_blank">' + IC_IG + ' Instagram</a>'
-              : '') +
-            (shop.facebook_url
-              ? '<a class="footer-social-link" href="' + esc(shop.facebook_url) + '" target="_blank">' + IC_FB + ' Facebook</a>'
-              : '') +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="footer-bottom">' +
-        '<p class="footer-copy">© ' + new Date().getFullYear() + ' ' + esc(shop.name || 'Shop') + '. All rights reserved. Wholesale catalogue.</p>' +
-      '</div>' +
-    '</div>' +
-  '</footer>';
-}
+// footerHTML() lives in common.js now — shared with product.js's footer.
 
 // ── Banner ──
 function startBanner() {

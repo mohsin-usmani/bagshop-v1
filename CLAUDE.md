@@ -42,7 +42,9 @@ public/
   product.html + assets/product.js  product detail page
   assets/styles.css        shared styling (strict black-and-white — `--brand:#000000`/`--brand-hover:#2a2a2a`
                             are the only accent colours; `--amber` exists for a couple of secondary badges only)
-  assets/common.js         fetch helper (with 20s AbortController timeout), toast, image compression
+  assets/common.js         fetch helper (with 20s AbortController timeout), toast, image compression,
+                            shared site footer (footerHTML() — reads the page's own DATA.shop, used by
+                            both catalog.js and product.js so the footer isn't missing on either page)
   _headers                 Cache-Control: no-store on /admin.html
 
 functions/
@@ -326,7 +328,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=53 (styles v=66)**, **product.html = v=42 (styles v=66)**, **s.html (catalogue) = v=51 (styles v=66)**
+  Current versions: **admin.html = v=53 (styles v=66)**, **product.html = v=43 (styles v=66)**, **s.html (catalogue) = v=52 (styles v=66)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.

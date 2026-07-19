@@ -93,6 +93,51 @@ function applyBranding(shop) {
   applyHeaderLogo(shop);
 }
 
+// ── Shared footer (catalogue + product pages) ──
+const IC_IG = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>';
+const IC_FB = '<svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>';
+// Reads the page's own `DATA.shop` global (set independently by catalog.js and
+// product.js) — resolved at call time, not definition time, so this one copy
+// works on both pages without either needing its own duplicate.
+function footerHTML() {
+  const shop = (typeof DATA !== "undefined" && DATA && DATA.shop) || {};
+  return '<footer class="site-footer">' +
+    '<div class="footer-inner">' +
+      '<div class="footer-cols">' +
+        // Col 1 — brand + about
+        '<div class="footer-col">' +
+          '<div class="footer-brand">' + esc(shop.name || 'Shop') + '</div>' +
+          (shop.about_us ? '<p class="footer-about">' + esc(shop.about_us) + '</p>' : '') +
+        '</div>' +
+        // Col 2 — Support
+        '<div class="footer-col">' +
+          '<div class="footer-col-head">Support</div>' +
+          '<ul class="footer-links">' +
+            '<li>How to Order</li>' +
+            '<li>Wholesale Pricing</li>' +
+            '<li>Contact Us on WhatsApp</li>' +
+          '</ul>' +
+        '</div>' +
+        // Col 3 — Follow Us
+        '<div class="footer-col">' +
+          '<div class="footer-col-head">Follow Us</div>' +
+          '<div class="footer-social">' +
+            (shop.instagram_url
+              ? '<a class="footer-social-link" href="' + esc(shop.instagram_url) + '" target="_blank">' + IC_IG + ' Instagram</a>'
+              : '') +
+            (shop.facebook_url
+              ? '<a class="footer-social-link" href="' + esc(shop.facebook_url) + '" target="_blank">' + IC_FB + ' Facebook</a>'
+              : '') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="footer-bottom">' +
+        '<p class="footer-copy">© ' + new Date().getFullYear() + ' ' + esc(shop.name || 'Shop') + '. All rights reserved. Wholesale catalogue.</p>' +
+      '</div>' +
+    '</div>' +
+  '</footer>';
+}
+
 // Resize/compress an image File in the browser to keep storage tiny + catalogue fast.
 function compressImage(file, maxEdge = 1000, quality = 0.82) {
   return new Promise((resolve) => {

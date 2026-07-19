@@ -85,6 +85,8 @@ async function init() {
   SHOW_PRICES = !!data.shop.show_prices;
   document.getElementById('navShopName').textContent = data.shop.name || '';
   applyBranding(data.shop);
+  const footerEl = document.getElementById('pdpFooter');
+  if (footerEl) footerEl.innerHTML = footerHTML();
 
   ARTICLE = data.articles.find(a => String(a.id) === String(PRODUCT_ID));
   if (!ARTICLE) return showError('Product not found.');
