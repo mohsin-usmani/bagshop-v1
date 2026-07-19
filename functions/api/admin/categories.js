@@ -1,5 +1,10 @@
 import { json, isAdmin } from '../_util.js';
 
+function parseVariants(json_str) {
+  if (!json_str) return {};
+  try { return JSON.parse(json_str) || {}; } catch (e) { return {}; }
+}
+
 export async function onRequestGet(context) {
   const { env } = context;
   if (!isAdmin(context)) return json({ error: 'auth' }, 403);
@@ -69,5 +74,18 @@ export async function onRequestDelete(context) {
     const navCats = nav.value.split(',').filter(c => c.trim() !== name);
     await env.DB.prepare("UPDATE settings SET value=? WHERE key='nav_categories'").bind(navCats.join(',')).run();
   }
+  // Clean up this category's header photos (left/right + every per-target
+  // crop) from R2 too, or they're orphaned in the bucket with no way to
+  // reclaim the storage once the category_images row is gone.
+  const imgRow = await env.DB.prepare(
+    "SELECT left_image_key, right_image_key, left_variants_json, right_variants_json FROM category_images WHERE category=?"
+  ).bind(name).first();
+  if (imgRow) {
+    if (imgRow.left_image_key) { try { await env.BUCKET.delete(imgRow.left_image_key); } catch (e) {} }
+    if (imgRow.right_image_key) { try { await env.BUCKET.delete(imgRow.right_image_key); } catch (e) {} }
+    for (const v of Object.values(parseVariants(imgRow.left_variants_json))) { if (v && v.key) { try { await env.BUCKET.delete(v.key); } catch (e) {} } }
+    for (const v of Object.values(parseVariants(imgRow.right_variants_json))) { if (v && v.key) { try { await env.BUCKET.delete(v.key); } catch (e) {} } }
+  }
+  await env.DB.prepare("DELETE FROM category_images WHERE category=?").bind(name).run();
   return json({ ok: true });
 }

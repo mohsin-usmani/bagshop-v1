@@ -63,7 +63,15 @@ export async function onRequestDelete(context) {
   if (!isAdmin(context)) return json({ error: "auth" }, 401);
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return json({ error: "no_id" }, 400);
-  // remove children first (D1 does not cascade by default)
+  // remove children first (D1 does not cascade by default) — also clean up
+  // the photo files themselves from R2, or deleting a product just orphans
+  // its images in the bucket forever with no way to reclaim the storage.
+  const photoRows = (await env.DB.prepare("SELECT url FROM photos WHERE article_id=?").bind(id).all()).results || [];
+  for (const p of photoRows) {
+    if (p.url && p.url.startsWith("/api/img/")) {
+      try { await env.BUCKET.delete(p.url.replace("/api/img/", "")); } catch (e) {}
+    }
+  }
   await env.DB.prepare("DELETE FROM photos WHERE article_id=?").bind(id).run();
   await env.DB.prepare("DELETE FROM variants WHERE article_id=?").bind(id).run();
   await env.DB.prepare("DELETE FROM articles WHERE id=?").bind(id).run();
