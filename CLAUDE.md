@@ -65,6 +65,11 @@ functions/
   api/admin/banners.js     banner management
   api/admin/categories.js  category management
   api/admin/category-images.js  category image management
+  api/admin/cleanup-photos.js  one-off maintenance tool — GET dry-runs (no changes), GET ?delete=1
+                            actually deletes: finds R2 objects under articles/ not referenced by any
+                            `photos` row anymore and removes them. Kept as a standing tool (not a
+                            throwaway script) since new orphans could still arise some other way even
+                            though the normal delete paths now clean up after themselves (see below).
   s/[token].js             /s/<token> → 302 /s.html?t=<token>
 ```
 
@@ -212,6 +217,11 @@ a `popstate` listener re-render the correct view when Back/Forward actually land
 `articles(id, article_code, name, category, description, base_price, is_active, is_new_arrival, created_at)`
 `variants(id, article_id, color, size, price, available_qty, is_active, updated_at)`
 `photos(id, article_id, color, url, sort_order)`
+  - **R2 cleanup on delete:** deleting a product (`articles.js` DELETE) removes its photo files from
+    R2, not just the DB rows; deleting a category (`categories.js` DELETE) does the same for that
+    category's header photos. Both were silent gaps until fixed — before that, every delete left its
+    R2 files orphaned forever with no way to reclaim the storage. `cleanup-photos.js` (file map above)
+    is the one-off tool that found and removed the backlog of orphans that had already accumulated.
 `access_tokens(id, token_hash, customer_label, customer_phone, created_at, expires_at, is_revoked)`
 `orders(id, token_id, customer_label, customer_phone, items_json, est_total, created_at, status)`
   - `customer_phone` copied from the link at checkout so a customer's history is preserved even
