@@ -475,7 +475,13 @@ function stockLiveInfo(a) {
   if (!vs.length) return { live: false, reason: "No colours/sizes yet — add one to go live." };
   const hasStock  = vs.some(v => (v.available_qty || 0) > 0);
   const hasActive = vs.some(v => v.is_active);
-  if (vs.some(v => v.is_active && (v.available_qty || 0) > 0)) return { live: true };
+  if (vs.some(v => v.is_active && (v.available_qty || 0) > 0)) {
+    // New live toggles are blocked without a photo (see toggleStockLive), but
+    // this catches products that went live before that check existed —
+    // customers would otherwise silently see a generic stock-photo guess.
+    if (!(a.photos || []).length) return { live: true, warning: "Live with no photo — customers see a generic stock photo instead of your product. Add a photo or turn it off." };
+    return { live: true };
+  }
   if (!hasStock)  return { live: false, reason: "Every colour is out of stock (qty 0) — set a stock quantity to go live." };
   if (!hasActive) return { live: false, reason: 'No colour is switched on — tick the "Live" box on a colour.' };
   return { live: false, reason: "Not visible to customers yet." };
@@ -521,7 +527,8 @@ function renderStock() {
     const info = stockLiveInfo(a);
     const collapsed = !expandAll;
     const badge = info.live ? '<span class="stock-badge live-badge">● Live</span>' : '<span class="stock-badge notlive-badge">Not live</span>';
-    const reasonLine = (!info.live && info.reason) ? '<div class="notlive-reason">' + esc(info.reason) + '</div>' : '';
+    const reasonLine = (!info.live && info.reason) ? '<div class="notlive-reason">' + esc(info.reason) + '</div>'
+      : (info.live && info.warning) ? '<div class="notlive-reason">⚠ ' + esc(info.warning) + '</div>' : '';
     const colours = new Set(vs.map(v => v.color).filter(Boolean)).size;
     const summary = vs.length
       ? (colours ? colours + ' colour' + (colours !== 1 ? 's' : '') + ' · ' : '') + vs.length + ' variant' + (vs.length !== 1 ? 's' : '')
@@ -586,12 +593,16 @@ async function saveRow(btn) {
   const price = pEl.value.trim() !== "" ? Number(pEl.value) : null;
   const qty = parseInt(qEl.value) || 0;
   btn.disabled = true;
-  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+  const { ok, data } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
     body: JSON.stringify({ updates: [{ id, available_qty: qty, price, is_active: aEl.checked }] }) });
   btn.disabled = false;
   if (!ok) return toast("Save failed");
+  // The server also blocks going live without a photo (aEl.checked here just
+  // echoes whatever toggleStockLive already validated, but re-sync in case).
+  const wasBlocked = aEl.checked && data && Array.isArray(data.blocked) && data.blocked.includes(id);
+  if (wasBlocked) { aEl.checked = false; toast("Add a photo before making this live"); }
   // Update the local model + reset the dirty baseline so the button hides.
-  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === id); if (v) { v.available_qty = qty; v.price = price; break; } }
+  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === id); if (v) { v.available_qty = qty; v.price = price; v.is_active = wasBlocked ? 0 : (aEl.checked ? 1 : v.is_active); break; } }
   pEl.dataset.orig = pEl.value; qEl.dataset.orig = qEl.value;
   btn.style.display = "none";
   refreshArticleLive(aid); // qty 0 ↔ >0 can flip the Live badge
@@ -608,13 +619,26 @@ async function toggleStockLive(cb) {
   const qEl = tr.querySelector(".qty-in"), pEl = tr.querySelector(".price-in");
   const qty = qEl ? (parseInt(qEl.value) || 0) : 0;
   const price = pEl && pEl.value.trim() !== "" ? Number(pEl.value) : null;
+  // A colour can't go live without a real photo — otherwise customers would
+  // see resolvePhotos()'s generic stock-photo guess instead of the actual
+  // product. Checked here for instant feedback; the PATCH below also
+  // enforces it server-side (its `blocked` list) in case this cache is stale.
+  const article = ARTICLES.find((a) => a.id === aid);
+  if (cb.checked && article && !(article.photos || []).length) {
+    cb.checked = false;
+    return toast("Add a photo before making this live");
+  }
   cb.disabled = true;
-  const { ok } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
+  const { ok, data } = await api("/api/admin/variants", { method: "PATCH", headers: { "content-type": "application/json" },
     body: JSON.stringify({ updates: [{ id: vid, available_qty: qty, price, is_active: cb.checked }] }) });
   cb.disabled = false;
   if (!ok) { cb.checked = !cb.checked; return toast("Save failed"); }
-  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === vid); if (v) { v.is_active = cb.checked ? 1 : 0; v.available_qty = qty; v.price = price; break; } }
+  const wasBlocked = cb.checked && data && Array.isArray(data.blocked) && data.blocked.includes(vid);
+  const finalActive = wasBlocked ? false : cb.checked;
+  if (wasBlocked) cb.checked = false;
+  for (const a of ARTICLES) { const v = (a.variants || []).find(x => x.id === vid); if (v) { v.is_active = finalActive ? 1 : 0; v.available_qty = qty; v.price = price; break; } }
   refreshArticleLive(aid);
+  if (wasBlocked) { toast("Add a photo before making this live"); return; }
   const info = stockLiveInfo(ARTICLES.find(a => a.id === aid) || {});
   toast(cb.checked ? (info.live ? "✓ Colour is live" : "Saved — add stock qty to go live") : "Colour hidden");
 }

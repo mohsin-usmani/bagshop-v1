@@ -148,6 +148,15 @@ always written as `1`. `stockLiveInfo()` (admin.js) mirrors this rule for the st
 - **Live switch (two equivalent controls):** the per-colour "Live" checkbox in Stock
   (`toggleStockLive`, auto-saves on toggle) and the master "Live" toggle in the Add-Product
   wizard status bar (`wzSetLive`, flips every colour of the product at once).
+- **A variant can't go live without at least one uploaded photo.** Without a real photo,
+  `resolvePhotos()` (catalog.js) shows a generic keyword-matched Unsplash stock photo instead
+  — misleading for customers picking a wholesale order by what they see. Enforced in both
+  places: client-side in `toggleStockLive`/`wzSetLive` (instant feedback, checks `a.photos`),
+  and server-side in `functions/api/admin/variants.js` POST/PATCH (the real guard — silently
+  forces `is_active` back to `0` and returns the blocked variant ids in `data.blocked` for the
+  client to toast about, rather than rejecting the whole batch). `stockLiveInfo()` also flags
+  any variant that's *already* live with no photo (e.g. from before this check existed) with a
+  `warning` shown in the Stock list, since those aren't retroactively unpublished.
 
 ### Stock tab
 - Table: article code, name, colour, size, price (editable), qty (editable), live toggle, Edit button
@@ -317,7 +326,7 @@ duplicate-article, price tiers, analytics)
 - **No build step** — vanilla HTML/CSS/JS only.
 - Deploy command: `wrangler pages deploy public --project-name bagshop`
 - After deploy, bump the `?v=N` version on script **and stylesheet** tags to bust CDN cache.
-  Current versions: **admin.html = v=52 (styles v=66)**, **product.html = v=42 (styles v=66)**, **s.html (catalogue) = v=51 (styles v=66)**
+  Current versions: **admin.html = v=53 (styles v=66)**, **product.html = v=42 (styles v=66)**, **s.html (catalogue) = v=51 (styles v=66)**
   NOTE: `admin.js`'s `jq(s)` RETURNS THE VALUE ALREADY WRAPPED IN SINGLE QUOTES (`'s'`), unlike
   `product.js`/`catalog.js` `jq()` which do not. In admin.js write `onclick="fn(' + jq(id) + ')"`
   (no extra quotes) — adding your own `\'...\'` double-wraps and breaks the handler.
