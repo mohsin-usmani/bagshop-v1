@@ -222,7 +222,7 @@ function renderBreadcrumb() {
 
 // ── Render PDP ──
 function renderPDP() {
-  document.title = (ARTICLE.name || ARTICLE.article_code) + ' — FinEx';
+  document.title = (ARTICLE.name || ARTICLE.article_code) + ' — ' + ((typeof DATA !== 'undefined' && DATA && DATA.shop && DATA.shop.name) || 'Shop');
   document.getElementById('pdpApp').innerHTML = pdpHTML();
   document.getElementById('pdpApp').style.paddingBottom = '24px';
   Z.scale = 1; Z.x = 0; Z.y = 0; // fresh gallery markup is already unzoomed — keep state in sync
