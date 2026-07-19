@@ -1,0 +1,21 @@
+name = "shop"
+compatibility_date = "2025-06-01"
+pages_build_output_dir = "public"
+
+# --- Database (create with: wrangler d1 create shop) ---
+[[d1_databases]]
+binding = "DB"
+database_name = "shop"
+database_id = "a46ec4c0-25bc-45e2-80e4-d579a76a6fcc"
+
+# --- Photo storage (create with: wrangler r2 bucket create shop-photos) ---
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "shop-photos"
+
+# --- Environment variables ---
+# DEV = "1" ONLY for local testing (bypasses admin login). MUST be "0" in production.
+# ALLOWED_EMAILS = comma-separated emails allowed into the admin (matches Cloudflare Access).
+[vars]
+DEV = "0"
+ALLOWED_EMAILS = "sharpmindmohsin@gmail.com,mauhidusmani@gmail.com"
