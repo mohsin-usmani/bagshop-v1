@@ -72,7 +72,8 @@
       "Read(//tmp/**)",
       "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" \"https://fonts.googleapis.com/css2?family=Anton&display=swap\" -o /tmp/anton_woff2.css)",
       "Bash(curl -sL \"https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-C8.woff2\" -o public/assets/fonts/Anton-Regular.woff2)",
-      "Bash(file public/assets/fonts/Anton-Regular.woff2)"
+      "Bash(file public/assets/fonts/Anton-Regular.woff2)",
+      "Bash(git log *)"
     ]
   }
 }
